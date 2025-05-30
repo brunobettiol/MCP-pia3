@@ -231,4 +231,40 @@ async def recommend_blogs_for_ai(
         )
     except Exception as e:
         logger.error(f"Erro ao recomendar blogs para IA: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Erro ao recomendar blogs: {str(e)}")
+
+@router.get(
+    "/ai/recommend/sources",
+    response_model=GenericResponse[List[str]],
+    summary="Recomendar fontes de blogs para IA",
+    description="Recomenda source_ids de blogs com base em uma consulta de texto para uso em chatbots de IA."
+)
+async def recommend_blog_sources_for_ai(
+    query: str = Query(..., description="Consulta de texto"),
+    limit: int = Query(3, description="Número máximo de blogs a retornar")
+):
+    """
+    Endpoint para recomendar apenas os source_ids de blogs para uso em chatbots de IA.
+    
+    Args:
+        query: A consulta de texto.
+        limit: Número máximo de blogs a retornar.
+        
+    Returns:
+        GenericResponse[List[str]]: Resposta contendo os source_ids dos blogs recomendados.
+    """
+    try:
+        service = BlogService()
+        blogs = await service.recommend_blogs(query, limit)
+        
+        # Extrair apenas os source_ids
+        source_ids = [blog.source_id for blog in blogs]
+        
+        return GenericResponse(
+            success=True,
+            data=source_ids,
+            message=f"Source IDs de blogs recomendados recuperados com sucesso"
+        )
+    except Exception as e:
+        logger.error(f"Erro ao recomendar source_ids de blogs para IA: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Erro ao recomendar blogs: {str(e)}") 
