@@ -98,6 +98,7 @@ class ShopifyService:
                 title
                 handle
                 description
+                tags
                 variants(first: 5) {
                   edges {
                     node {
@@ -183,7 +184,8 @@ class ShopifyService:
                         currency=variants[0].price.currency_code if variants else "BRL",
                         images=images,
                         variants=variants,
-                        available=any(v.available for v in variants) if variants else False
+                        available=any(v.available for v in variants) if variants else False,
+                        tags=node.get("tags", [])
                     )
                     
                     products.append(product)
@@ -219,6 +221,7 @@ class ShopifyService:
             title
             handle
             description
+            tags
             variants(first: 5) {
               edges {
                 node {
@@ -298,7 +301,8 @@ class ShopifyService:
                 currency=variants[0].price.currency_code if variants else "BRL",
                 images=images,
                 variants=variants,
-                available=any(v.available for v in variants) if variants else False
+                available=any(v.available for v in variants) if variants else False,
+                tags=product_data.get("tags", [])
             )
             
             logger.info(f"Produto encontrado: {product.title}")
@@ -342,7 +346,8 @@ class ShopifyService:
                 "description": clean_description,
                 "url": f"https://{self.store}/products/{product.handle}",
                 "image": product.images[0].url if product.images else "",
-                "available": "Disponível" if product.available else "Indisponível"
+                "available": "Disponível" if product.available else "Indisponível",
+                "tags": ", ".join(product.tags) if product.tags else ""
             }
             
             formatted_products.append(formatted_product)

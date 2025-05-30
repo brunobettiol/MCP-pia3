@@ -12,7 +12,7 @@ router = APIRouter()
     "/",
     response_model=ProductResponse,
     summary="Listar todos os produtos",
-    description="Retorna todos os produtos disponíveis na loja Shopify."
+    description="Retorna todos os produtos disponíveis na loja Shopify, incluindo descrição completa e tags."
 )
 async def get_all_products():
     """
@@ -38,7 +38,7 @@ async def get_all_products():
     "/{handle}",
     response_model=GenericResponse[Product],
     summary="Buscar produto por handle",
-    description="Retorna um produto específico pelo seu handle (slug)."
+    description="Retorna um produto específico pelo seu handle (slug), incluindo descrição completa e tags."
 )
 async def get_product_by_handle(handle: str):
     """

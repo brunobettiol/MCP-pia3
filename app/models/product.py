@@ -30,10 +30,11 @@ class Product(BaseModel):
     handle: str
     description: Optional[str] = None
     price: float
-    currency: str = "BRL"
+    currency: str = "USD"
     images: List[ProductImage] = []
     variants: List[ProductVariant] = []
     available: bool = True
+    tags: List[str] = []
     
 class ProductList(BaseModel):
     """Modelo para representar uma lista de produtos."""
