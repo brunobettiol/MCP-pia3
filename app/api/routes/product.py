@@ -74,7 +74,7 @@ async def get_product_by_handle(handle: str):
     summary="Formatar produtos para IA",
     description="Retorna produtos formatados para uso em chatbots de IA."
 )
-async def get_products_for_ai(limit: Optional[int] = Query(10, description="Número máximo de produtos a retornar")):
+async def get_products_for_ai(limit: Optional[int] = Query(250, description="Número máximo de produtos a retornar")):
     """
     Endpoint para obter produtos formatados para uso em chatbots de IA.
     
