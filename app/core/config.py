@@ -2,6 +2,7 @@ import os
 from pydantic import Field
 from pydantic_settings import BaseSettings
 from typing import Optional
+from pathlib import Path
 
 class Settings(BaseSettings):
     """Configurações da aplicação carregadas de variáveis de ambiente."""
@@ -12,6 +13,9 @@ class Settings(BaseSettings):
     DEBUG: bool = Field(default=False)
     HOST: str = Field(default="0.0.0.0")
     PORT: int = Field(default=8000)
+    
+    # Diretório base do projeto
+    BASE_DIR: str = str(Path(__file__).resolve().parent.parent.parent)
     
     # Configurações do Shopify
     SHOPIFY_STORE: str = Field(...)
