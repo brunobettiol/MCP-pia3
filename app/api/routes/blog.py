@@ -235,36 +235,40 @@ async def recommend_blogs_for_ai(
 
 @router.get(
     "/ai/recommend/sources",
-    response_model=GenericResponse[List[str]],
-    summary="Recomendar fontes de blogs para IA",
-    description="Recomenda source_ids de blogs com base em uma consulta de texto para uso em chatbots de IA."
+    response_model=GenericResponse[str],
+    summary="Recomendar melhor fonte de blog para IA",
+    description="Recomenda o source_id do melhor blog com base em uma consulta de texto para uso em chatbots de IA."
 )
 async def recommend_blog_sources_for_ai(
-    query: str = Query(..., description="Consulta de texto"),
-    limit: int = Query(3, description="Número máximo de blogs a retornar")
+    query: str = Query(..., description="Consulta de texto")
 ):
     """
-    Endpoint para recomendar apenas os source_ids de blogs para uso em chatbots de IA.
+    Endpoint para recomendar apenas o source_id do melhor blog para uso em chatbots de IA.
     
     Args:
         query: A consulta de texto.
-        limit: Número máximo de blogs a retornar.
         
     Returns:
-        GenericResponse[List[str]]: Resposta contendo os source_ids dos blogs recomendados.
+        GenericResponse[str]: Resposta contendo o source_id do melhor blog recomendado.
     """
     try:
         service = BlogService()
-        blogs = await service.recommend_blogs(query, limit)
+        blogs = await service.recommend_blogs(query, 1)  # Limitar a 1 resultado
         
-        # Extrair apenas os source_ids
-        source_ids = [blog.source_id for blog in blogs]
-        
-        return GenericResponse(
-            success=True,
-            data=source_ids,
-            message=f"Source IDs de blogs recomendados recuperados com sucesso"
-        )
+        # Retornar apenas o source_id do melhor resultado
+        if blogs:
+            best_source_id = blogs[0].source_id
+            return GenericResponse(
+                success=True,
+                data=best_source_id,
+                message=f"Melhor source ID de blog recomendado recuperado com sucesso"
+            )
+        else:
+            return GenericResponse(
+                success=False,
+                data=None,
+                message="Nenhum blog encontrado para a consulta fornecida"
+            )
     except Exception as e:
-        logger.error(f"Erro ao recomendar source_ids de blogs para IA: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Erro ao recomendar blogs: {str(e)}") 
+        logger.error(f"Erro ao recomendar source_id de blog para IA: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Erro ao recomendar blog: {str(e)}") 
