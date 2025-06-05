@@ -2,6 +2,7 @@ import json
 import os
 from typing import List, Dict, Optional
 import re
+from datetime import datetime
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 import numpy as np
@@ -19,8 +20,22 @@ class BlogService:
         self._load_blogs()
         self._build_search_index()
     
+    def _parse_firestore_date(self, date_obj) -> Optional[datetime]:
+        """Parse Firestore date format with __time__ field"""
+        if isinstance(date_obj, dict) and "__time__" in date_obj:
+            try:
+                return datetime.fromisoformat(date_obj["__time__"].replace("Z", "+00:00"))
+            except:
+                return None
+        elif isinstance(date_obj, str):
+            try:
+                return datetime.fromisoformat(date_obj.replace("Z", "+00:00"))
+            except:
+                return None
+        return None
+    
     def _load_blogs(self):
-        """Load all blog entries from JSON files"""
+        """Load all blog entries from Firestore export JSON files"""
         blogs_dir = os.path.join(settings.BASE_DIR, "data", "blogs")
         if not os.path.exists(blogs_dir):
             return
@@ -30,12 +45,68 @@ class BlogService:
                 filepath = os.path.join(blogs_dir, filename)
                 try:
                     with open(filepath, 'r', encoding='utf-8') as f:
-                        data = json.load(f)
-                        for item in data:
-                            blog = BlogEntry(**item)
-                            self.blogs.append(blog)
+                        firestore_data = json.load(f)
+                        
+                        # Handle Firestore export format
+                        if 'data' in firestore_data:
+                            # This is a Firestore export
+                            for blog_id, blog_data in firestore_data['data'].items():
+                                try:
+                                    # Clean and process the blog data
+                                    processed_data = {
+                                        'id': blog_data.get('id', blog_id),
+                                        'title': blog_data.get('title', ''),
+                                        'content': self._strip_html(blog_data.get('content', '')),
+                                        'author': blog_data.get('author', ''),
+                                        'category': blog_data.get('category', ''),
+                                        'subcategory': blog_data.get('subcategory'),
+                                        'summary': blog_data.get('summary'),
+                                        'tags': blog_data.get('tags', []),
+                                        'featured': blog_data.get('featured', False),
+                                        'contentType': blog_data.get('contentType'),
+                                        'createdAt': self._parse_firestore_date(blog_data.get('createdAt')) or datetime.now(),
+                                        'updatedAt': self._parse_firestore_date(blog_data.get('updatedAt')),
+                                        'publishedDate': self._parse_firestore_date(blog_data.get('publishedDate'))
+                                    }
+                                    
+                                    blog = BlogEntry(**processed_data)
+                                    self.blogs.append(blog)
+                                except Exception as e:
+                                    print(f"Error processing blog {blog_id}: {e}")
+                        else:
+                            # Handle old format (array of blog objects)
+                            if isinstance(firestore_data, list):
+                                for item in firestore_data:
+                                    blog = BlogEntry(**item)
+                                    self.blogs.append(blog)
+                            else:
+                                # Single blog object
+                                blog = BlogEntry(**firestore_data)
+                                self.blogs.append(blog)
+                                
                 except Exception as e:
                     print(f"Error loading {filename}: {e}")
+
+    def _strip_html(self, html_content: str) -> str:
+        """Strip HTML tags from content and return clean text"""
+        if not html_content:
+            return ""
+        
+        # Remove HTML tags using regex
+        clean_text = re.sub(r'<[^>]+>', ' ', html_content)
+        
+        # Replace common HTML entities
+        clean_text = clean_text.replace('&nbsp;', ' ')
+        clean_text = clean_text.replace('&amp;', '&')
+        clean_text = clean_text.replace('&lt;', '<')
+        clean_text = clean_text.replace('&gt;', '>')
+        clean_text = clean_text.replace('&quot;', '"')
+        clean_text = clean_text.replace('&#39;', "'")
+        
+        # Normalize whitespace
+        clean_text = re.sub(r'\s+', ' ', clean_text).strip()
+        
+        return clean_text
 
     def _preprocess_text(self, text: str) -> str:
         """Clean and preprocess text for better matching"""
@@ -58,11 +129,15 @@ class BlogService:
         if not self.blogs:
             return
         
-        # Combine title, content, and tags for each blog
+        # Combine title, content, tags, summary, category, and subcategory for each blog
         self.processed_content = []
         for blog in self.blogs:
             # Combine all text fields with appropriate weights
+            # Title gets the highest weight (3x), tags and summary get medium weight (2x), content gets base weight
             combined_text = f"{blog.title} {blog.title} {blog.title} " + \
+                           f"{blog.category} {blog.category} " + \
+                           f"{blog.subcategory or ''} {blog.subcategory or ''} " + \
+                           f"{blog.summary or ''} {blog.summary or ''} " + \
                            f"{' '.join(blog.tags)} {' '.join(blog.tags)} " + \
                            f"{blog.content}"
             
@@ -121,6 +196,18 @@ class BlogService:
         filtered_blogs = [blog for blog in self.blogs if blog.category.lower() == category.lower()]
         return BlogList(blogs=filtered_blogs, total=len(filtered_blogs))
 
+    def get_blogs_by_subcategory(self, subcategory: str) -> BlogList:
+        """Get blogs filtered by subcategory"""
+        filtered_blogs = [blog for blog in self.blogs 
+                         if blog.subcategory and blog.subcategory.lower() == subcategory.lower()]
+        return BlogList(blogs=filtered_blogs, total=len(filtered_blogs))
+
+    def get_blogs_by_tag(self, tag: str) -> BlogList:
+        """Get blogs filtered by tag"""
+        filtered_blogs = [blog for blog in self.blogs 
+                         if tag.lower() in [t.lower() for t in blog.tags]]
+        return BlogList(blogs=filtered_blogs, total=len(filtered_blogs))
+
     def get_blog_by_source_id(self, source_id: str) -> Optional[BlogEntry]:
         """Get a specific blog by source ID"""
         for blog in self.blogs:
@@ -157,10 +244,10 @@ class BlogService:
         
         return BlogList(blogs=recommended_blogs, total=len(recommended_blogs))
 
-    def get_best_recommendation(self, query: str) -> Optional[str]:
-        """Get the single best blog recommendation source_id based on query"""
+    def recommend_best_blog_with_score(self, query: str) -> tuple[Optional[BlogEntry], float]:
+        """Get the best blog recommendation with TF-IDF similarity score"""
         if not query or not self.blogs or self.tfidf_matrix is None:
-            return None
+            return None, 0.0
         
         # Preprocess query
         processed_query = self._preprocess_text(query)
@@ -175,10 +262,23 @@ class BlogService:
         best_idx = similarities.argmax()
         best_similarity = similarities[best_idx]
         
-        # Return source_id only if similarity meets minimum threshold
-        min_similarity = 0.1
-        if best_similarity >= min_similarity:
-            return self.blogs[best_idx].source_id
+        # Convert cosine similarity to a more intuitive score (0-10)
+        score = best_similarity * 10
+        
+        # Set minimum relevance threshold (adjust as needed)
+        min_relevance_score = 0.5  # Equivalent to 5% cosine similarity
+        
+        if score >= min_relevance_score:
+            return self.blogs[best_idx], score
+        
+        return None, 0.0
+
+    def get_best_recommendation(self, query: str) -> Optional[str]:
+        """Get the single best blog recommendation source_id based on query with threshold"""
+        blog, score = self.recommend_best_blog_with_score(query)
+        
+        if blog and score >= 0.5:  # Minimum threshold
+            return blog.source_id
         
         return None
 
@@ -186,161 +286,53 @@ class BlogService:
         """Get all unique categories"""
         categories = set(blog.category for blog in self.blogs)
         return sorted(list(categories))
+    
+    def get_subcategories(self) -> List[str]:
+        """Get all unique subcategories"""
+        subcategories = set(blog.subcategory for blog in self.blogs if blog.subcategory)
+        return sorted(list(subcategories))
 
     def get_statistics(self) -> Dict:
         """Get blog statistics"""
         categories = {}
+        subcategories = {}
+        
         for blog in self.blogs:
             categories[blog.category] = categories.get(blog.category, 0) + 1
+            if blog.subcategory:
+                subcategories[blog.subcategory] = subcategories.get(blog.subcategory, 0) + 1
         
         return {
             "total_blogs": len(self.blogs),
             "categories": categories,
+            "subcategories": subcategories,
+            "featured_count": len([blog for blog in self.blogs if blog.featured]),
             "authors": list(set(blog.author for blog in self.blogs))
         }
 
-    async def get_blogs_by_tag(self, tag: str) -> List[BlogEntry]:
+    def recommend_blogs_for_product(self, product_handle: str, limit: int = 3) -> BlogList:
         """
-        Retorna blogs que contêm uma tag específica.
+        Recommend blogs related to a specific product using TF-IDF similarity.
         
         Args:
-            tag: A tag a ser buscada.
+            product_handle: The product handle.
+            limit: Maximum number of blogs to return.
             
         Returns:
-            Lista de blogs com a tag especificada.
+            BlogList with recommended blogs.
         """
-        await self.load_blogs()
-        return [blog for blog in self.blogs if tag.lower() in [t.lower() for t in blog.tags]]
-    
-    async def recommend_blogs_for_product(self, product_handle: str, limit: int = 3) -> List[BlogEntry]:
-        """
-        Recomenda blogs relacionados a um produto específico.
-        
-        Args:
-            product_handle: O handle do produto.
-            limit: Número máximo de blogs a retornar.
-            
-        Returns:
-            Lista de blogs recomendados.
-        """
-        from app.services.shopify_service import ShopifyService
-        
-        await self.load_blogs()
-        
         try:
-            # Obter informações do produto
+            from app.services.shopify_service import ShopifyService
+            
+            # Get product information
             shopify_service = ShopifyService()
-            product = await shopify_service.get_product_by_handle(product_handle)
+            # Note: This would need to be adapted based on your Shopify service implementation
+            # For now, using the product_handle as search query
+            search_query = product_handle.replace('-', ' ')
             
-            if not product:
-                logger.warning(f"Produto não encontrado: {product_handle}")
-                return []
-            
-            # Criar consulta baseada no título e tags do produto
-            search_terms = [product.title] + product.tags
-            search_query = " ".join(search_terms)
-            
-            # Encontrar blogs relevantes
-            relevant_blogs = await self.recommend_blogs(search_query, limit)
-            return relevant_blogs
+            # Find relevant blogs using TF-IDF
+            return self.get_recommendations(search_query, limit)
             
         except Exception as e:
-            logger.error(f"Erro ao recomendar blogs para produto: {str(e)}")
-            return []
-    
-    async def recommend_blogs(self, query: str, limit: int = 3) -> List[BlogEntry]:
-        """
-        Recomenda blogs com base em uma consulta de texto.
-        
-        Args:
-            query: A consulta de texto.
-            limit: Número máximo de blogs a retornar.
-            
-        Returns:
-            Lista de blogs recomendados.
-        """
-        await self.load_blogs()
-        
-        # Implementação simples de recomendação baseada em palavras-chave
-        # Em um sistema de produção, você pode querer usar um modelo de ML ou embeddings
-        
-        query = query.lower()
-        query_words = set(re.findall(r'\w+', query))
-        
-        # Calcular pontuação para cada blog
-        blog_scores = []
-        
-        for blog in self.blogs:
-            score = 0
-            
-            # Verificar título
-            title_words = set(re.findall(r'\w+', blog.title.lower()))
-            title_match = len(query_words.intersection(title_words))
-            score += title_match * 3  # Título tem peso maior
-            
-            # Verificar conteúdo
-            content_words = set(re.findall(r'\w+', blog.content.lower()))
-            content_match = len(query_words.intersection(content_words))
-            score += content_match
-            
-            # Verificar tags
-            tag_words = set()
-            for tag in blog.tags:
-                tag_words.update(set(re.findall(r'\w+', tag.lower())))
-            
-            tag_match = len(query_words.intersection(tag_words))
-            score += tag_match * 2  # Tags têm peso médio
-            
-            blog_scores.append((blog, score))
-        
-        # Ordenar por pontuação e limitar resultados
-        blog_scores.sort(key=lambda x: x[1], reverse=True)
-        recommended_blogs = [blog for blog, score in blog_scores[:limit] if score > 0]
-        
-        return recommended_blogs
-
-    async def recommend_best_blog_with_score(self, query: str) -> tuple[BlogEntry, float] | tuple[None, 0]:
-        """
-        Recomenda o melhor blog com base em uma consulta de texto e retorna o score.
-        
-        Args:
-            query: A consulta de texto.
-            
-        Returns:
-            Tupla contendo o melhor blog e seu score, ou (None, 0) se nenhum for encontrado.
-        """
-        await self.load_blogs()
-        
-        query = query.lower()
-        query_words = set(re.findall(r'\w+', query))
-        
-        # Calcular pontuação para cada blog
-        best_blog = None
-        best_score = 0
-        
-        for blog in self.blogs:
-            score = 0
-            
-            # Verificar título
-            title_words = set(re.findall(r'\w+', blog.title.lower()))
-            title_match = len(query_words.intersection(title_words))
-            score += title_match * 3  # Título tem peso maior
-            
-            # Verificar conteúdo
-            content_words = set(re.findall(r'\w+', blog.content.lower()))
-            content_match = len(query_words.intersection(content_words))
-            score += content_match
-            
-            # Verificar tags
-            tag_words = set()
-            for tag in blog.tags:
-                tag_words.update(set(re.findall(r'\w+', tag.lower())))
-            
-            tag_match = len(query_words.intersection(tag_words))
-            score += tag_match * 2  # Tags têm peso médio
-            
-            if score > best_score:
-                best_score = score
-                best_blog = blog
-        
-        return (best_blog, best_score) if best_blog else (None, 0) 
+            print(f"Error recommending blogs for product: {str(e)}")
+            return BlogList(blogs=[], total=0) 

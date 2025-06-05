@@ -25,10 +25,25 @@ def get_categories():
     """Get all available blog categories"""
     return blog_service.get_categories()
 
+@router.get("/subcategories", response_model=List[str])
+def get_subcategories():
+    """Get all available blog subcategories"""
+    return blog_service.get_subcategories()
+
 @router.get("/category/{category}", response_model=BlogList)
 def get_blogs_by_category(category: str):
     """Get blogs by category"""
     return blog_service.get_blogs_by_category(category)
+
+@router.get("/subcategory/{subcategory}", response_model=BlogList)
+def get_blogs_by_subcategory(subcategory: str):
+    """Get blogs by subcategory"""
+    return blog_service.get_blogs_by_subcategory(subcategory)
+
+@router.get("/tag/{tag}", response_model=BlogList)
+def get_blogs_by_tag(tag: str):
+    """Get blogs by tag"""
+    return blog_service.get_blogs_by_tag(tag)
 
 @router.get("/recommendations", response_model=BlogList)
 def get_recommendations(
@@ -45,6 +60,21 @@ def get_ai_recommendation(query: str = Query(..., description="Query for AI reco
     if not source_id:
         raise HTTPException(status_code=404, detail="No relevant blog found")
     return {"source_id": source_id}
+
+@router.get("/ai/recommend/debug")
+def get_ai_recommendation_debug(query: str = Query(..., description="Query for AI recommendation debug")):
+    """Get best blog recommendation with score for debugging"""
+    blog, score = blog_service.recommend_best_blog_with_score(query)
+    if not blog:
+        return {"message": "No blogs found", "score": 0.0}
+    return {
+        "source_id": blog.source_id,
+        "title": blog.title,
+        "category": blog.category,
+        "subcategory": blog.subcategory,
+        "score": float(score),
+        "threshold_met": bool(score >= 0.5)
+    }
 
 @router.get("/statistics")
 def get_blog_statistics():

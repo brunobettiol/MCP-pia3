@@ -1,0 +1,77 @@
+{
+  "meta": {
+    "format": "JSON",
+    "version": "1.1.0",
+    "projectId": "partner-in-aging-staging",
+    "resourcePath": ["resources"],
+    "recursive": false,
+    "creationTime": 1749143711,
+    "app": "firefoo"
+  },
+  "data": {
+    "21ACQT1kr0zqa8wurCvy": {
+      "author": "Partner in Aging",
+      "category": "healthy",
+      "content": "<h2>What to Expect: Therapy Evaluations</h2><p>Therapists assess the patient's function and develop a care plan involving diagnosis, goals, and session frequency. Therapy begins once approved by a healthcare provider, focusing on physical and occupational rehab.</p>",
+      "contentType": "html",
+      "createdAt": {"__time__": "2025-04-29T22:27:13.663Z"},
+      "featured": false,
+      "id": "21ACQT1kr0zqa8wurCvy",
+      "publishedDate": "2025-04-29T00:00:00.000Z",
+      "subcategory": "skilled-nursing",
+      "summary": "Explains how therapy evaluations at skilled nursing facilities work, from assessment to care plan initiation.",
+      "tags": ["therapy evaluation", "rehabilitation", "skilled nursing", "PT", "OT"],
+      "title": "What to Expect: Therapy Evaluations",
+      "updatedAt": {"__time__": "2025-04-29T22:27:13.663Z"},
+      "__collections__": {}
+    },
+    "2VpTbsK1JemaJP2xNBDB": {
+      "author": "Partner in Aging",
+      "category": "healthy",
+      "content": "<h2>End-of-Life Care for Someone with Dementia</h2><h3>Introduction</h3><p>End-of-life care for dementia focuses on comfort and dignity. As the disease progresses, understanding the final stages can help families provide compassionate support.</p><h3>Recognizing Late-Stage Dementia</h3><ul><li>Severe cognitive decline and physical dependence.</li><li>Increased risk of infections like pneumonia.</li><li>Loss of mobility and communication abilities.</li></ul><h3>Providing Comfort and Support</h3><ul><li><strong>Palliative Care:</strong> Focus on symptom relief and comfort.</li><li><strong>Hospice Services:</strong> Offer medical, emotional, and spiritual support.</li><li><strong>Meaningful Interactions:</strong> Simple gestures like holding hands or playing music can provide deep comfort.</li></ul><h3>Family Considerations</h3><ul><li>Seek grief counseling or support groups to process emotions.</li><li>Celebrate their life and legacy with positive memories.</li></ul><h3>Conclusion</h3><p>End-of-life care is about honoring your loved one's journey and ensuring their final days are peaceful and dignified.</p>",
+      "contentType": "html",
+      "createdAt": {"__time__": "2025-04-29T22:53:59.751Z"},
+      "featured": false,
+      "id": "2VpTbsK1JemaJP2xNBDB",
+      "publishedDate": "2025-04-29T00:00:00.000Z",
+      "subcategory": "dementia",
+      "summary": "Learn how to provide compassionate, dignified end-of-life care for a loved one with dementia.",
+      "tags": ["end-of-life care", "palliative care", "hospice", "dementia", "grief support"],
+      "title": "End-of-Life Care for Someone with Dementia",
+      "updatedAt": {"__time__": "2025-04-29T22:53:59.751Z"},
+      "__collections__": {}
+    },
+    "4SPWhitvvTqwc0711qgd": {
+      "author": "Partner in Aging",
+      "category": "healthy",
+      "content": "<h2>Understanding Hospice Care</h2><p>Hospice care is a specialized approach to end-of-life care that focuses on comfort, dignity, and quality of life. For individuals with terminal illnesses, hospice provides compassionate support tailored to their unique needs.</p><h3>What Is Hospice Care?</h3><p>Designed for those with terminal illnesses no longer seeking curative treatment, hospice provides palliative care to manage symptoms and promote well-being. It also supports families emotionally and spiritually.</p><h3>Who Qualifies?</h3><p>Eligibility generally includes a terminal diagnosis with a life expectancy of six months or less, with conditions like advanced cancer, heart or lung failure, and dementia among those qualifying.</p><h3>Hospice vs. Palliative Care</h3><p>Hospice is for those near end-of-life who forgo curative treatment. Palliative care can begin at diagnosis and may accompany treatment.</p><p>Understanding hospice is the first step toward making an informed care decision that honors your loved one's wishes.</p>",
+      "contentType": "html",
+      "createdAt": {"__time__": "2025-04-29T22:11:37.247Z"},
+      "featured": false,
+      "id": "4SPWhitvvTqwc0711qgd",
+      "publishedDate": "2025-04-29T00:00:00.000Z",
+      "subcategory": "hospice",
+      "summary": "An introduction to hospice care, who qualifies, and how it differs from palliative care to help families make informed decisions.",
+      "tags": ["hospice", "end-of-life", "palliative care", "terminal illness", "family support"],
+      "title": "Understanding Hospice Care",
+      "updatedAt": {"__time__": "2025-04-29T22:11:37.247Z"},
+      "__collections__": {}
+    },
+    "2jK9qSbIqZtj9dl325ZJ": {
+      "author": "Partner in Aging",
+      "category": "safe",
+      "content": "<h2>Communicating Effectively With Healthcare Providers</h2><p>Clear communication is essential for securing the best healthcare outcomes for seniors.</p><h3>Preparation and Participation</h3><p>Prepare questions, review the care plan, and encourage senior involvement.</p><h3>During Appointments</h3><p>Take notes, record conversations (with permission), and request written summaries.</p><h3>Follow-Up</h3><p>Review instructions, coordinate with other caregivers, and use technology to stay organized.</p><h3>Conclusion</h3><p>Strong communication empowers seniors and ensures better coordination of medical care.</p>",
+      "contentType": "html",
+      "createdAt": {"__time__": "2025-04-26T17:25:32.983Z"},
+      "featured": false,
+      "id": "2jK9qSbIqZtj9dl325ZJ",
+      "publishedDate": "2025-04-25T00:00:00.000Z",
+      "subcategory": "home-safety",
+      "summary": "Build better communication with healthcare providers to support your aging loved one's medical care and advocacy.",
+      "tags": ["healthcare communication", "patient advocacy", "senior health", "medical support", "care coordination"],
+      "title": "Communicating Effectively With Healthcare Providers",
+      "updatedAt": {"__time__": "2025-04-26T17:25:32.983Z"},
+      "__collections__": {}
+    }
+  }
+} 

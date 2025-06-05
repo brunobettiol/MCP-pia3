@@ -5,13 +5,28 @@ from pydantic import BaseModel, Field
 class BlogEntry(BaseModel):
     """Modelo para representar uma entrada de blog."""
     
+    id: str
     title: str
     content: str
-    source_id: str
-    created_at: datetime
     author: str
     category: str
+    subcategory: Optional[str] = None
+    summary: Optional[str] = None
     tags: List[str] = []
+    featured: bool = False
+    contentType: Optional[str] = None
+    createdAt: datetime
+    updatedAt: Optional[datetime] = None
+    publishedDate: Optional[datetime] = None
+    
+    # For backward compatibility
+    @property
+    def source_id(self) -> str:
+        return self.id
+    
+    @property
+    def created_at(self) -> datetime:
+        return self.createdAt
 
 class BlogList(BaseModel):
     """Modelo para representar uma lista de blogs."""
