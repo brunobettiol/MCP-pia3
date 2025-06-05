@@ -196,4 +196,50 @@ class BlogService:
         blog_scores.sort(key=lambda x: x[1], reverse=True)
         recommended_blogs = [blog for blog, score in blog_scores[:limit] if score > 0]
         
-        return recommended_blogs 
+        return recommended_blogs
+
+    async def recommend_best_blog_with_score(self, query: str) -> tuple[BlogEntry, float] | tuple[None, 0]:
+        """
+        Recomenda o melhor blog com base em uma consulta de texto e retorna o score.
+        
+        Args:
+            query: A consulta de texto.
+            
+        Returns:
+            Tupla contendo o melhor blog e seu score, ou (None, 0) se nenhum for encontrado.
+        """
+        await self.load_blogs()
+        
+        query = query.lower()
+        query_words = set(re.findall(r'\w+', query))
+        
+        # Calcular pontuação para cada blog
+        best_blog = None
+        best_score = 0
+        
+        for blog in self.blogs:
+            score = 0
+            
+            # Verificar título
+            title_words = set(re.findall(r'\w+', blog.title.lower()))
+            title_match = len(query_words.intersection(title_words))
+            score += title_match * 3  # Título tem peso maior
+            
+            # Verificar conteúdo
+            content_words = set(re.findall(r'\w+', blog.content.lower()))
+            content_match = len(query_words.intersection(content_words))
+            score += content_match
+            
+            # Verificar tags
+            tag_words = set()
+            for tag in blog.tags:
+                tag_words.update(set(re.findall(r'\w+', tag.lower())))
+            
+            tag_match = len(query_words.intersection(tag_words))
+            score += tag_match * 2  # Tags têm peso médio
+            
+            if score > best_score:
+                best_score = score
+                best_blog = blog
+        
+        return (best_blog, best_score) if best_blog else (None, 0) 

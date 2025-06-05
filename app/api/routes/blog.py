@@ -244,6 +244,7 @@ async def recommend_blog_sources_for_ai(
 ):
     """
     Endpoint para recomendar apenas o source_id do melhor blog para uso em chatbots de IA.
+    Aplica um threshold de relevância para evitar recomendações irrelevantes.
     
     Args:
         query: A consulta de texto.
@@ -253,21 +254,25 @@ async def recommend_blog_sources_for_ai(
     """
     try:
         service = BlogService()
-        blogs = await service.recommend_blogs(query, 1)  # Limitar a 1 resultado
+        best_blog, score = await service.recommend_best_blog_with_score(query)
         
-        # Retornar apenas o source_id do melhor resultado
-        if blogs:
-            best_source_id = blogs[0].source_id
+        # Threshold de relevância - ajustável conforme necessário
+        # Score mínimo de 2: pelo menos uma palavra em título/tag OU duas palavras no conteúdo
+        RELEVANCE_THRESHOLD = 2
+        
+        if best_blog and score >= RELEVANCE_THRESHOLD:
+            logger.info(f"Blog recomendado com score {score}: {best_blog.title}")
             return GenericResponse(
                 success=True,
-                data=best_source_id,
-                message=f"Melhor source ID de blog recomendado recuperado com sucesso"
+                data=best_blog.source_id,
+                message=f"Blog recomendado encontrado (relevância: {score})"
             )
         else:
+            logger.info(f"Nenhum blog suficientemente relevante encontrado. Melhor score: {score}")
             return GenericResponse(
                 success=False,
                 data=None,
-                message="Nenhum blog encontrado para a consulta fornecida"
+                message="Nenhum blog relevante encontrado para a consulta"
             )
     except Exception as e:
         logger.error(f"Erro ao recomendar source_id de blog para IA: {str(e)}")
