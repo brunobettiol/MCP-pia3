@@ -1,86 +1,204 @@
 import json
 import os
-from typing import List, Dict, Any, Optional
-from datetime import datetime
-from loguru import logger
+from typing import List, Dict, Optional
 import re
-from pathlib import Path
-
-from app.models.blog import BlogEntry
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.metrics.pairwise import cosine_similarity
+import numpy as np
+from app.models.blog import BlogEntry, BlogList, BlogResponse
 from app.core.config import settings
 
+
 class BlogService:
-    """Serviço para gerenciar blogs e recomendações."""
-    
     def __init__(self):
-        """Inicializa o serviço de blogs."""
-        self.blog_data_path = os.path.join(settings.BASE_DIR, "data", "blogs")
-        self.blogs = []
-        self.loaded = False
+        """Initialize the blog service with TF-IDF indexing"""
+        self.blogs: List[BlogEntry] = []
+        self.tfidf_vectorizer: Optional[TfidfVectorizer] = None
+        self.tfidf_matrix = None
+        self.processed_content = []
+        self._load_blogs()
+        self._build_search_index()
     
-    async def load_blogs(self) -> None:
-        """
-        Carrega todos os blogs dos arquivos JSON.
-        """
-        if self.loaded:
+    def _load_blogs(self):
+        """Load all blog entries from JSON files"""
+        blogs_dir = os.path.join(settings.BASE_DIR, "data", "blogs")
+        if not os.path.exists(blogs_dir):
             return
-            
-        try:
-            logger.info("Carregando dados de blogs...")
-            self.blogs = []
-            
-            # Garantir que o diretório existe
-            os.makedirs(self.blog_data_path, exist_ok=True)
-            
-            # Carregar cada arquivo JSON na pasta de blogs
-            for file_name in os.listdir(self.blog_data_path):
-                if file_name.endswith('.json'):
-                    file_path = os.path.join(self.blog_data_path, file_name)
-                    logger.info(f"Carregando arquivo de blog: {file_path}")
-                    
-                    with open(file_path, 'r', encoding='utf-8') as file:
-                        category_blogs = json.load(file)
-                        
-                        for blog_data in category_blogs:
-                            # Converter string de data para objeto datetime
-                            if isinstance(blog_data.get('created_at'), str):
-                                blog_data['created_at'] = datetime.fromisoformat(
-                                    blog_data['created_at'].replace('Z', '+00:00')
-                                )
-                            
-                            blog = BlogEntry(**blog_data)
+        
+        for filename in os.listdir(blogs_dir):
+            if filename.endswith('.json'):
+                filepath = os.path.join(blogs_dir, filename)
+                try:
+                    with open(filepath, 'r', encoding='utf-8') as f:
+                        data = json.load(f)
+                        for item in data:
+                            blog = BlogEntry(**item)
                             self.blogs.append(blog)
-            
-            logger.info(f"Total de blogs carregados: {len(self.blogs)}")
-            self.loaded = True
-            
-        except Exception as e:
-            logger.error(f"Erro ao carregar blogs: {str(e)}")
-            raise
-    
-    async def get_all_blogs(self) -> List[BlogEntry]:
-        """
-        Retorna todos os blogs carregados.
+                except Exception as e:
+                    print(f"Error loading {filename}: {e}")
+
+    def _preprocess_text(self, text: str) -> str:
+        """Clean and preprocess text for better matching"""
+        if not text:
+            return ""
         
-        Returns:
-            Lista de todos os blogs.
-        """
-        await self.load_blogs()
-        return self.blogs
-    
-    async def get_blogs_by_category(self, category: str) -> List[BlogEntry]:
-        """
-        Retorna blogs de uma categoria específica.
+        # Remove HTML tags
+        text = re.sub(r'<[^>]+>', ' ', text)
         
-        Args:
-            category: A categoria dos blogs.
+        # Convert to lowercase
+        text = text.lower()
+        
+        # Remove extra whitespace and normalize
+        text = re.sub(r'\s+', ' ', text).strip()
+        
+        return text
+
+    def _build_search_index(self):
+        """Build TF-IDF index for all blog content"""
+        if not self.blogs:
+            return
+        
+        # Combine title, content, and tags for each blog
+        self.processed_content = []
+        for blog in self.blogs:
+            # Combine all text fields with appropriate weights
+            combined_text = f"{blog.title} {blog.title} {blog.title} " + \
+                           f"{' '.join(blog.tags)} {' '.join(blog.tags)} " + \
+                           f"{blog.content}"
             
-        Returns:
-            Lista de blogs da categoria especificada.
-        """
-        await self.load_blogs()
-        return [blog for blog in self.blogs if blog.category.lower() == category.lower()]
-    
+            processed = self._preprocess_text(combined_text)
+            self.processed_content.append(processed)
+        
+        # Initialize TF-IDF vectorizer with optimized parameters
+        self.tfidf_vectorizer = TfidfVectorizer(
+            max_features=5000,  # Limit vocabulary size
+            stop_words='english',  # Remove common English stop words
+            ngram_range=(1, 2),  # Use both unigrams and bigrams
+            min_df=1,  # Minimum document frequency
+            max_df=0.9,  # Maximum document frequency (filter out very common terms)
+            sublinear_tf=True,  # Apply sublinear tf scaling
+            norm='l2'  # Normalize vectors
+        )
+        
+        # Build TF-IDF matrix
+        self.tfidf_matrix = self.tfidf_vectorizer.fit_transform(self.processed_content)
+
+    def get_all_blogs(self) -> BlogList:
+        """Get all blogs"""
+        return BlogList(blogs=self.blogs, total=len(self.blogs))
+
+    def search_blogs(self, query: str, limit: int = 10) -> BlogList:
+        """Search blogs using TF-IDF similarity"""
+        if not query or not self.blogs or self.tfidf_matrix is None:
+            return BlogList(blogs=[], total=0)
+        
+        # Preprocess query
+        processed_query = self._preprocess_text(query)
+        
+        # Transform query to TF-IDF vector
+        query_vector = self.tfidf_vectorizer.transform([processed_query])
+        
+        # Calculate cosine similarity
+        similarities = cosine_similarity(query_vector, self.tfidf_matrix).flatten()
+        
+        # Get indices sorted by similarity (descending)
+        sorted_indices = similarities.argsort()[::-1]
+        
+        # Filter results with minimum similarity threshold
+        min_similarity = 0.1  # Adjust threshold as needed
+        filtered_results = []
+        
+        for idx in sorted_indices:
+            if similarities[idx] >= min_similarity and len(filtered_results) < limit:
+                filtered_results.append(self.blogs[idx])
+            elif len(filtered_results) >= limit:
+                break
+        
+        return BlogList(blogs=filtered_results, total=len(filtered_results))
+
+    def get_blogs_by_category(self, category: str) -> BlogList:
+        """Get blogs filtered by category"""
+        filtered_blogs = [blog for blog in self.blogs if blog.category.lower() == category.lower()]
+        return BlogList(blogs=filtered_blogs, total=len(filtered_blogs))
+
+    def get_blog_by_source_id(self, source_id: str) -> Optional[BlogEntry]:
+        """Get a specific blog by source ID"""
+        for blog in self.blogs:
+            if blog.source_id == source_id:
+                return blog
+        return None
+
+    def get_recommendations(self, query: str, limit: int = 5) -> BlogList:
+        """Get blog recommendations based on query using TF-IDF similarity"""
+        if not query or not self.blogs or self.tfidf_matrix is None:
+            return BlogList(blogs=[], total=0)
+        
+        # Preprocess query
+        processed_query = self._preprocess_text(query)
+        
+        # Transform query to TF-IDF vector
+        query_vector = self.tfidf_vectorizer.transform([processed_query])
+        
+        # Calculate cosine similarity
+        similarities = cosine_similarity(query_vector, self.tfidf_matrix).flatten()
+        
+        # Get indices sorted by similarity (descending)
+        sorted_indices = similarities.argsort()[::-1]
+        
+        # Filter results with minimum similarity threshold
+        min_similarity = 0.15  # Slightly higher threshold for recommendations
+        recommended_blogs = []
+        
+        for idx in sorted_indices:
+            if similarities[idx] >= min_similarity and len(recommended_blogs) < limit:
+                recommended_blogs.append(self.blogs[idx])
+            elif len(recommended_blogs) >= limit:
+                break
+        
+        return BlogList(blogs=recommended_blogs, total=len(recommended_blogs))
+
+    def get_best_recommendation(self, query: str) -> Optional[str]:
+        """Get the single best blog recommendation source_id based on query"""
+        if not query or not self.blogs or self.tfidf_matrix is None:
+            return None
+        
+        # Preprocess query
+        processed_query = self._preprocess_text(query)
+        
+        # Transform query to TF-IDF vector
+        query_vector = self.tfidf_vectorizer.transform([processed_query])
+        
+        # Calculate cosine similarity
+        similarities = cosine_similarity(query_vector, self.tfidf_matrix).flatten()
+        
+        # Find the best match
+        best_idx = similarities.argmax()
+        best_similarity = similarities[best_idx]
+        
+        # Return source_id only if similarity meets minimum threshold
+        min_similarity = 0.1
+        if best_similarity >= min_similarity:
+            return self.blogs[best_idx].source_id
+        
+        return None
+
+    def get_categories(self) -> List[str]:
+        """Get all unique categories"""
+        categories = set(blog.category for blog in self.blogs)
+        return sorted(list(categories))
+
+    def get_statistics(self) -> Dict:
+        """Get blog statistics"""
+        categories = {}
+        for blog in self.blogs:
+            categories[blog.category] = categories.get(blog.category, 0) + 1
+        
+        return {
+            "total_blogs": len(self.blogs),
+            "categories": categories,
+            "authors": list(set(blog.author for blog in self.blogs))
+        }
+
     async def get_blogs_by_tag(self, tag: str) -> List[BlogEntry]:
         """
         Retorna blogs que contêm uma tag específica.
@@ -93,23 +211,6 @@ class BlogService:
         """
         await self.load_blogs()
         return [blog for blog in self.blogs if tag.lower() in [t.lower() for t in blog.tags]]
-    
-    async def search_blogs(self, query: str) -> List[BlogEntry]:
-        """
-        Busca blogs por texto no título ou conteúdo.
-        
-        Args:
-            query: O texto a ser buscado.
-            
-        Returns:
-            Lista de blogs que correspondem à consulta.
-        """
-        await self.load_blogs()
-        query = query.lower()
-        return [
-            blog for blog in self.blogs 
-            if query in blog.title.lower() or query in blog.content.lower()
-        ]
     
     async def recommend_blogs_for_product(self, product_handle: str, limit: int = 3) -> List[BlogEntry]:
         """
