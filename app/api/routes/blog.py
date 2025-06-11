@@ -73,7 +73,7 @@ def get_ai_recommendation_debug(query: str = Query(..., description="Query for A
         "category": blog.category,
         "subcategory": blog.subcategory,
         "score": float(score),
-        "threshold_met": bool(score >= 4.0)
+        "threshold_met": bool(score >= 1.5)
     }
 
 @router.get("/statistics")
