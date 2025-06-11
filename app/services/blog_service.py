@@ -180,7 +180,7 @@ class BlogService:
         sorted_indices = similarities.argsort()[::-1]
         
         # Filter results with minimum similarity threshold
-        min_similarity = 0.1  # Adjust threshold as needed
+        min_similarity = 0.4  # Extremely high threshold for search
         filtered_results = []
         
         for idx in sorted_indices:
@@ -233,7 +233,7 @@ class BlogService:
         sorted_indices = similarities.argsort()[::-1]
         
         # Filter results with minimum similarity threshold
-        min_similarity = 0.15  # Slightly higher threshold for recommendations
+        min_similarity = 0.5  # Extremely high threshold for recommendations
         recommended_blogs = []
         
         for idx in sorted_indices:
@@ -266,7 +266,7 @@ class BlogService:
         score = best_similarity * 10
         
         # Set minimum relevance threshold (adjust as needed)
-        min_relevance_score = 0.5  # Equivalent to 5% cosine similarity
+        min_relevance_score = 4.0  # Equivalent to 40% cosine similarity - extremely high threshold
         
         if score >= min_relevance_score:
             return self.blogs[best_idx], score
@@ -277,7 +277,7 @@ class BlogService:
         """Get the single best blog recommendation source_id based on query with threshold"""
         blog, score = self.recommend_best_blog_with_score(query)
         
-        if blog and score >= 0.5:  # Minimum threshold
+        if blog and score >= 4.0:  # Minimum threshold - extremely high for best quality
             return blog.source_id
         
         return None

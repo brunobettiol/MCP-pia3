@@ -122,7 +122,7 @@ class ServiceService:
         sorted_indices = similarities.argsort()[::-1]
         
         # Filter results with minimum similarity threshold
-        min_similarity = 0.05  # Lower threshold for search
+        min_similarity = 0.35  # Extremely high threshold for search
         filtered_results = []
         
         for idx in sorted_indices:
@@ -164,7 +164,7 @@ class ServiceService:
         sorted_indices = similarities.argsort()[::-1]
         
         # Filter results with minimum similarity threshold
-        min_similarity = 0.05  # Lower threshold for recommendations
+        min_similarity = 0.4  # Extremely high threshold for recommendations
         recommended_providers = []
         
         for idx in sorted_indices:
@@ -203,7 +203,7 @@ class ServiceService:
         provider, score = self.recommend_best_provider_with_score(query)
         
         # Set minimum relevance threshold (adjust as needed)
-        min_relevance_score = 0.1  # Equivalent to 1% cosine similarity - much lower threshold
+        min_relevance_score = 3.0  # Equivalent to 30% cosine similarity - extremely high threshold
         
         if provider and score >= min_relevance_score:
             return provider.id

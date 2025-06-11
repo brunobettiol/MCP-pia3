@@ -144,7 +144,7 @@ class ProductRecommendationService:
         score = best_similarity * 10
         
         # Set minimum relevance threshold (adjust as needed)
-        min_relevance_score = 0.5  # Equivalent to 5% cosine similarity
+        min_relevance_score = 4.0  # Equivalent to 40% cosine similarity - extremely high threshold
         
         if score >= min_relevance_score:
             return self.products[best_idx], score
@@ -155,7 +155,7 @@ class ProductRecommendationService:
         """Get the single best product recommendation handle based on query with threshold"""
         product, score = await self.recommend_best_product_with_score(query)
         
-        if product and score >= 0.5:  # Minimum threshold
+        if product and score >= 4.0:  # Minimum threshold - extremely high for best quality
             return product.handle
         
         return None
@@ -180,7 +180,7 @@ class ProductRecommendationService:
         sorted_indices = similarities.argsort()[::-1]
         
         # Filter results with minimum similarity threshold
-        min_similarity = 0.01  # Very low threshold for recommendations (1% cosine similarity)
+        min_similarity = 0.4  # Extremely high threshold for recommendations (40% cosine similarity)
         recommended_products = []
         
         for idx in sorted_indices:
@@ -211,7 +211,7 @@ class ProductRecommendationService:
         sorted_indices = similarities.argsort()[::-1]
         
         # Filter results with minimum similarity threshold
-        min_similarity = 0.01  # Very low threshold for search (1% cosine similarity)
+        min_similarity = 0.3  # Very high threshold for search (30% cosine similarity)
         filtered_results = []
         
         for idx in sorted_indices:
