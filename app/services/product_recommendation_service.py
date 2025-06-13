@@ -191,17 +191,24 @@ class ProductRecommendationService:
             processed = self._preprocess_text(combined_text)
             self.processed_content.append(processed)
         
+        # Handle small datasets - skip TF-IDF if too few products
+        if len(self.processed_content) < 2:
+            print(f"Skipping TF-IDF for small dataset ({len(self.processed_content)} products)")
+            self.tfidf_matrix = None
+            self.tfidf_vectorizer = None
+            return
+        
         # Initialize TF-IDF vectorizer with optimized parameters
         # Adjust parameters based on number of documents
         num_docs = len(self.processed_content)
-        max_features = min(3000, num_docs * 50)  # Smaller vocabulary for better focus
+        max_features = min(1000, num_docs * 20)  # Even smaller vocabulary for small datasets
         min_df = 1  # Always include words that appear at least once
-        max_df = max(0.8, 1.0 - (1.0 / num_docs))  # Ensure max_df > min_df
+        max_df = min(0.95, max(0.5, 1.0 - (2.0 / num_docs)))  # Ensure max_df > min_df and reasonable
         
         self.tfidf_vectorizer = TfidfVectorizer(
             max_features=max_features if max_features > 0 else None,
-            stop_words='english',  # Remove common English stop words
-            ngram_range=(1, 3),  # Include trigrams for better phrase matching
+            stop_words=None,  # Don't remove stop words for small datasets
+            ngram_range=(1, 2),  # Simpler ngrams for small datasets
             min_df=min_df,
             max_df=max_df,
             sublinear_tf=True,  # Apply sublinear tf scaling
@@ -212,16 +219,12 @@ class ProductRecommendationService:
         if self.processed_content:
             try:
                 self.tfidf_matrix = self.tfidf_vectorizer.fit_transform(self.processed_content)
+                print(f"Built TF-IDF matrix for {len(self.processed_content)} products")
             except Exception as e:
                 print(f"Error building TF-IDF matrix: {e}")
-                # Fallback to simpler configuration
-                self.tfidf_vectorizer = TfidfVectorizer(
-                    stop_words=None,
-                    ngram_range=(1, 1),
-                    min_df=1,
-                    max_df=1.0
-                )
-                self.tfidf_matrix = self.tfidf_vectorizer.fit_transform(self.processed_content)
+                # Fallback - disable TF-IDF for small datasets
+                self.tfidf_matrix = None
+                self.tfidf_vectorizer = None
 
     async def recommend_best_product_with_score(self, query: str) -> Tuple[Optional[Product], float]:
         """Get the best product recommendation with hybrid scoring"""
@@ -238,16 +241,21 @@ class ProductRecommendationService:
             category_score = self._calculate_product_category_score(query, product)
             direct_keyword_score = self._calculate_direct_keyword_score(query, product)
             
-            # TF-IDF score
+            # TF-IDF score (only if matrix exists)
             tfidf_score = 0.0
-            if self.tfidf_matrix is not None:
+            if self.tfidf_matrix is not None and self.tfidf_vectorizer is not None:
                 processed_query = self._preprocess_text(query)
                 query_vector = self.tfidf_vectorizer.transform([processed_query])
                 similarities = cosine_similarity(query_vector, self.tfidf_matrix).flatten()
                 tfidf_score = similarities[i] * 10  # Scale to 0-10
             
-            # Combined score with heavy emphasis on category and direct keyword matching
-            combined_score = (category_score * 0.5) + (direct_keyword_score * 0.4) + (tfidf_score * 0.1)
+            # Combined score - adjust weights based on whether TF-IDF is available
+            if self.tfidf_matrix is not None:
+                # Normal scoring with TF-IDF
+                combined_score = (category_score * 0.5) + (direct_keyword_score * 0.4) + (tfidf_score * 0.1)
+            else:
+                # Fallback scoring without TF-IDF
+                combined_score = (category_score * 0.6) + (direct_keyword_score * 0.4)
             
             if combined_score > best_score:
                 best_score = combined_score
@@ -259,8 +267,8 @@ class ProductRecommendationService:
         """Get the single best product recommendation handle based on query with threshold"""
         product, score = await self.recommend_best_product_with_score(query)
         
-        # Set minimum relevance threshold - higher for quality
-        min_relevance_score = 2.0  # Require meaningful category or keyword matching
+        # Set minimum relevance threshold - very low for better coverage
+        min_relevance_score = 0.3  # Very permissive threshold for product matching
         
         if product and score >= min_relevance_score:
             return product.handle
@@ -281,18 +289,23 @@ class ProductRecommendationService:
             category_score = self._calculate_product_category_score(query, product)
             direct_keyword_score = self._calculate_direct_keyword_score(query, product)
             
-            # TF-IDF score
+            # TF-IDF score (only if matrix exists)
             tfidf_score = 0.0
-            if self.tfidf_matrix is not None:
+            if self.tfidf_matrix is not None and self.tfidf_vectorizer is not None:
                 processed_query = self._preprocess_text(query)
                 query_vector = self.tfidf_vectorizer.transform([processed_query])
                 similarities = cosine_similarity(query_vector, self.tfidf_matrix).flatten()
                 tfidf_score = similarities[i] * 10  # Scale to 0-10
             
-            # Combined score with weights favoring category and keyword matching
-            combined_score = (category_score * 0.4) + (direct_keyword_score * 0.4) + (tfidf_score * 0.2)
+            # Combined score - adjust weights based on whether TF-IDF is available
+            if self.tfidf_matrix is not None:
+                # Normal scoring with TF-IDF
+                combined_score = (category_score * 0.4) + (direct_keyword_score * 0.4) + (tfidf_score * 0.2)
+            else:
+                # Fallback scoring without TF-IDF
+                combined_score = (category_score * 0.5) + (direct_keyword_score * 0.5)
             
-            if combined_score > 1.0:  # Higher threshold for recommendations
+            if combined_score > 0.5:  # Lowered threshold for recommendations
                 scored_products.append((product, combined_score))
         
         # Sort by score and return top results
@@ -315,18 +328,23 @@ class ProductRecommendationService:
             category_score = self._calculate_product_category_score(query, product)
             direct_keyword_score = self._calculate_direct_keyword_score(query, product)
             
-            # TF-IDF score
+            # TF-IDF score (only if matrix exists)
             tfidf_score = 0.0
-            if self.tfidf_matrix is not None:
+            if self.tfidf_matrix is not None and self.tfidf_vectorizer is not None:
                 processed_query = self._preprocess_text(query)
                 query_vector = self.tfidf_vectorizer.transform([processed_query])
                 similarities = cosine_similarity(query_vector, self.tfidf_matrix).flatten()
                 tfidf_score = similarities[i] * 10  # Scale to 0-10
             
-            # Combined score with balanced weights
-            combined_score = (category_score * 0.3) + (direct_keyword_score * 0.4) + (tfidf_score * 0.3)
+            # Combined score - adjust weights based on whether TF-IDF is available
+            if self.tfidf_matrix is not None:
+                # Normal scoring with TF-IDF
+                combined_score = (category_score * 0.3) + (direct_keyword_score * 0.4) + (tfidf_score * 0.3)
+            else:
+                # Fallback scoring without TF-IDF
+                combined_score = (category_score * 0.4) + (direct_keyword_score * 0.6)
             
-            if combined_score > 0.5:  # Minimum threshold for search
+            if combined_score > 0.3:  # Lower threshold for search
                 scored_products.append((product, combined_score))
         
         # Sort by score and return top results
