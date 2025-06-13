@@ -10,12 +10,57 @@ from app.services.shopify_service import ShopifyService
 
 class ProductRecommendationService:
     def __init__(self):
-        """Initialize the product recommendation service with TF-IDF indexing"""
+        """Initialize the product recommendation service with intelligent keyword-based matching"""
         self.products: List[Product] = []
         self.tfidf_vectorizer: Optional[TfidfVectorizer] = None
         self.tfidf_matrix = None
         self.processed_content = []
         self._loaded = False
+        
+        # Domain-specific keyword mappings for better product matching
+        self.product_keywords = {
+            'mobility': [
+                'walker', 'wheelchair', 'cane', 'rollator', 'mobility scooter',
+                'walking stick', 'crutches', 'mobility aid', 'walking aid',
+                'transport chair', 'knee walker', 'mobility device'
+            ],
+            'bathroom_safety': [
+                'grab bars', 'shower seat', 'bath bench', 'toilet safety',
+                'raised toilet seat', 'commode', 'shower chair', 'bath rail',
+                'safety rail', 'bathroom safety', 'shower grab bar', 'tub rail',
+                'toilet rail', 'shower handle', 'bath handle', 'non-slip mat'
+            ],
+            'home_safety': [
+                'handrails', 'stair rail', 'ramp', 'threshold ramp', 'door ramp',
+                'safety light', 'motion sensor light', 'night light', 'LED light',
+                'lighting', 'lights', 'illumination', 'bright light', 'lamp',
+                'flashlight', 'emergency light', 'pathway light', 'step light'
+            ],
+            'daily_living': [
+                'reacher', 'grabber', 'dressing aid', 'sock aid', 'shoe horn',
+                'button hook', 'zipper pull', 'jar opener', 'can opener',
+                'kitchen aid', 'eating utensils', 'adaptive utensils',
+                'large grip', 'easy grip', 'ergonomic', 'arthritis aid'
+            ],
+            'medical_equipment': [
+                'blood pressure monitor', 'thermometer', 'pulse oximeter',
+                'nebulizer', 'CPAP', 'oxygen concentrator', 'hospital bed',
+                'medical alert', 'pill dispenser', 'medication organizer',
+                'first aid', 'medical supplies', 'health monitor'
+            ],
+            'comfort': [
+                'cushion', 'pillow', 'support cushion', 'back support',
+                'seat cushion', 'lumbar support', 'orthopedic pillow',
+                'memory foam', 'gel cushion', 'pressure relief',
+                'comfort pad', 'positioning aid'
+            ],
+            'exercise': [
+                'exercise equipment', 'resistance band', 'therapy ball',
+                'balance pad', 'yoga mat', 'stretching aid', 'fitness',
+                'physical therapy', 'rehabilitation', 'strength training',
+                'balance training', 'flexibility', 'workout'
+            ]
+        }
     
     async def _ensure_loaded(self):
         """Ensure products are loaded before processing"""
@@ -71,18 +116,76 @@ class ProductRecommendationService:
         
         return text
 
+    def _calculate_product_category_score(self, query: str, product: Product) -> float:
+        """Calculate product category relevance score based on domain keywords"""
+        query_lower = query.lower()
+        max_score = 0.0
+        
+        # Check each product category and its keywords
+        for category, keywords in self.product_keywords.items():
+            # Calculate keyword match score for this category
+            keyword_matches = sum(1 for keyword in keywords if keyword in query_lower)
+            if keyword_matches > 0:
+                # Check if product matches this category based on title, description, or tags
+                product_text = f"{product.title} {self._strip_html(product.description or '')} {' '.join(product.tags)}".lower()
+                category_matches = sum(1 for keyword in keywords if keyword in product_text)
+                
+                if category_matches > 0:
+                    # Score based on both query and product matching this category
+                    category_score = ((keyword_matches / len(keywords)) * (category_matches / len(keywords))) * 10
+                    max_score = max(max_score, category_score)
+        
+        return max_score
+
+    def _calculate_direct_keyword_score(self, query: str, product: Product) -> float:
+        """Calculate direct keyword matching score"""
+        query_lower = query.lower()
+        score = 0.0
+        
+        # Check title for direct matches (highest weight)
+        title_words = product.title.lower().split()
+        query_words = query_lower.split()
+        title_matches = sum(1 for word in query_words if any(word in title_word for title_word in title_words))
+        if title_matches > 0:
+            score += (title_matches / len(query_words)) * 6.0
+        
+        # Check tags for matches
+        for tag in product.tags:
+            if tag.lower() in query_lower:
+                score += 3.0
+        
+        # Check description for matches
+        if product.description:
+            description_text = self._strip_html(product.description).lower()
+            description_matches = sum(1 for word in query_words if word in description_text)
+            if description_matches > 0:
+                score += (description_matches / len(query_words)) * 2.0
+        
+        # Key phrases that should boost relevance
+        key_phrases = [
+            'grab bars', 'handrails', 'lighting', 'lights', 'walker', 'wheelchair',
+            'safety', 'mobility', 'bathroom', 'shower', 'toilet', 'medical',
+            'exercise', 'therapy', 'support', 'aid', 'assistance'
+        ]
+        
+        product_text = f"{product.title} {self._strip_html(product.description or '')} {' '.join(product.tags)}".lower()
+        for phrase in key_phrases:
+            if phrase in query_lower and phrase in product_text:
+                score += 2.0
+        
+        return min(score, 10.0)  # Cap at 10
+
     def _build_search_index(self):
-        """Build TF-IDF index for all product content"""
+        """Build TF-IDF index for all product content with title and tags emphasis"""
         if not self.products:
             return
         
-        # Combine title, description, tags for each product
+        # Combine title, description, tags for each product with emphasis on title and tags
         self.processed_content = []
         for product in self.products:
-            # Combine all text fields with appropriate weights
-            # Title gets the highest weight (3x), tags get medium weight (2x), description gets base weight
-            combined_text = f"{product.title} {product.title} {product.title} " + \
-                           f"{' '.join(product.tags)} {' '.join(product.tags)} " + \
+            # Emphasize title and tags much more than description
+            combined_text = f"{product.title} " * 8 + \
+                           f"{' '.join(product.tags)} " * 5 + \
                            f"{self._strip_html(product.description or '')}"
             
             processed = self._preprocess_text(combined_text)
@@ -91,14 +194,14 @@ class ProductRecommendationService:
         # Initialize TF-IDF vectorizer with optimized parameters
         # Adjust parameters based on number of documents
         num_docs = len(self.processed_content)
-        max_features = min(5000, num_docs * 100)  # Reasonable vocabulary size
+        max_features = min(3000, num_docs * 50)  # Smaller vocabulary for better focus
         min_df = 1  # Always include words that appear at least once
-        max_df = max(0.95, 1.0 - (1.0 / num_docs))  # Ensure max_df > min_df
+        max_df = max(0.8, 1.0 - (1.0 / num_docs))  # Ensure max_df > min_df
         
         self.tfidf_vectorizer = TfidfVectorizer(
             max_features=max_features if max_features > 0 else None,
             stop_words='english',  # Remove common English stop words
-            ngram_range=(1, 2),  # Use both unigrams and bigrams
+            ngram_range=(1, 3),  # Include trigrams for better phrase matching
             min_df=min_df,
             max_df=max_df,
             sublinear_tf=True,  # Apply sublinear tf scaling
@@ -121,104 +224,114 @@ class ProductRecommendationService:
                 self.tfidf_matrix = self.tfidf_vectorizer.fit_transform(self.processed_content)
 
     async def recommend_best_product_with_score(self, query: str) -> Tuple[Optional[Product], float]:
-        """Get the best product recommendation with TF-IDF similarity score"""
+        """Get the best product recommendation with hybrid scoring"""
         await self._ensure_loaded()
         
-        if not query or not self.products or self.tfidf_matrix is None:
+        if not query or not self.products:
             return None, 0.0
         
-        # Preprocess query
-        processed_query = self._preprocess_text(query)
+        best_product = None
+        best_score = 0.0
         
-        # Transform query to TF-IDF vector
-        query_vector = self.tfidf_vectorizer.transform([processed_query])
+        for i, product in enumerate(self.products):
+            # Calculate multiple scores
+            category_score = self._calculate_product_category_score(query, product)
+            direct_keyword_score = self._calculate_direct_keyword_score(query, product)
+            
+            # TF-IDF score
+            tfidf_score = 0.0
+            if self.tfidf_matrix is not None:
+                processed_query = self._preprocess_text(query)
+                query_vector = self.tfidf_vectorizer.transform([processed_query])
+                similarities = cosine_similarity(query_vector, self.tfidf_matrix).flatten()
+                tfidf_score = similarities[i] * 10  # Scale to 0-10
+            
+            # Combined score with heavy emphasis on category and direct keyword matching
+            combined_score = (category_score * 0.5) + (direct_keyword_score * 0.4) + (tfidf_score * 0.1)
+            
+            if combined_score > best_score:
+                best_score = combined_score
+                best_product = product
         
-        # Calculate cosine similarity
-        similarities = cosine_similarity(query_vector, self.tfidf_matrix).flatten()
-        
-        # Find the best match
-        best_idx = similarities.argmax()
-        best_similarity = similarities[best_idx]
-        
-        # Convert cosine similarity to a more intuitive score (0-10)
-        score = best_similarity * 10
-        
-        # Set minimum relevance threshold (adjust as needed)
-        min_relevance_score = 1.5  # Equivalent to 15% cosine similarity - balanced threshold
-        
-        if score >= min_relevance_score:
-            return self.products[best_idx], score
-        
-        return None, 0.0
+        return best_product, best_score
 
     async def get_best_recommendation(self, query: str) -> Optional[str]:
         """Get the single best product recommendation handle based on query with threshold"""
         product, score = await self.recommend_best_product_with_score(query)
         
-        if product and score >= 1.5:  # Minimum threshold - balanced for good quality
+        # Set minimum relevance threshold - higher for quality
+        min_relevance_score = 2.0  # Require meaningful category or keyword matching
+        
+        if product and score >= min_relevance_score:
             return product.handle
         
         return None
 
     async def get_recommendations(self, query: str, limit: int = 5) -> List[Product]:
-        """Get product recommendations based on query using TF-IDF similarity"""
+        """Get product recommendations based on query using hybrid scoring"""
         await self._ensure_loaded()
         
-        if not query or not self.products or self.tfidf_matrix is None:
+        if not query or not self.products:
             return []
         
-        # Preprocess query
-        processed_query = self._preprocess_text(query)
+        scored_products = []
         
-        # Transform query to TF-IDF vector
-        query_vector = self.tfidf_vectorizer.transform([processed_query])
+        for i, product in enumerate(self.products):
+            # Calculate multiple scores
+            category_score = self._calculate_product_category_score(query, product)
+            direct_keyword_score = self._calculate_direct_keyword_score(query, product)
+            
+            # TF-IDF score
+            tfidf_score = 0.0
+            if self.tfidf_matrix is not None:
+                processed_query = self._preprocess_text(query)
+                query_vector = self.tfidf_vectorizer.transform([processed_query])
+                similarities = cosine_similarity(query_vector, self.tfidf_matrix).flatten()
+                tfidf_score = similarities[i] * 10  # Scale to 0-10
+            
+            # Combined score with weights favoring category and keyword matching
+            combined_score = (category_score * 0.4) + (direct_keyword_score * 0.4) + (tfidf_score * 0.2)
+            
+            if combined_score > 1.0:  # Higher threshold for recommendations
+                scored_products.append((product, combined_score))
         
-        # Calculate cosine similarity
-        similarities = cosine_similarity(query_vector, self.tfidf_matrix).flatten()
-        
-        # Get indices sorted by similarity (descending)
-        sorted_indices = similarities.argsort()[::-1]
-        
-        # Filter results with minimum similarity threshold
-        min_similarity = 0.2  # Balanced threshold for recommendations (20% cosine similarity)
-        recommended_products = []
-        
-        for idx in sorted_indices:
-            if similarities[idx] >= min_similarity and len(recommended_products) < limit:
-                recommended_products.append(self.products[idx])
-            elif len(recommended_products) >= limit:
-                break
+        # Sort by score and return top results
+        scored_products.sort(key=lambda x: x[1], reverse=True)
+        recommended_products = [product for product, score in scored_products[:limit]]
         
         return recommended_products
 
     async def search_products(self, query: str, limit: int = 10) -> List[Product]:
-        """Search products using TF-IDF similarity"""
+        """Search products using hybrid scoring"""
         await self._ensure_loaded()
         
-        if not query or not self.products or self.tfidf_matrix is None:
+        if not query or not self.products:
             return []
         
-        # Preprocess query
-        processed_query = self._preprocess_text(query)
+        scored_products = []
         
-        # Transform query to TF-IDF vector
-        query_vector = self.tfidf_vectorizer.transform([processed_query])
+        for i, product in enumerate(self.products):
+            # Calculate multiple scores
+            category_score = self._calculate_product_category_score(query, product)
+            direct_keyword_score = self._calculate_direct_keyword_score(query, product)
+            
+            # TF-IDF score
+            tfidf_score = 0.0
+            if self.tfidf_matrix is not None:
+                processed_query = self._preprocess_text(query)
+                query_vector = self.tfidf_vectorizer.transform([processed_query])
+                similarities = cosine_similarity(query_vector, self.tfidf_matrix).flatten()
+                tfidf_score = similarities[i] * 10  # Scale to 0-10
+            
+            # Combined score with balanced weights
+            combined_score = (category_score * 0.3) + (direct_keyword_score * 0.4) + (tfidf_score * 0.3)
+            
+            if combined_score > 0.5:  # Minimum threshold for search
+                scored_products.append((product, combined_score))
         
-        # Calculate cosine similarity
-        similarities = cosine_similarity(query_vector, self.tfidf_matrix).flatten()
-        
-        # Get indices sorted by similarity (descending)
-        sorted_indices = similarities.argsort()[::-1]
-        
-        # Filter results with minimum similarity threshold
-        min_similarity = 0.15  # Balanced threshold for search (15% cosine similarity)
-        filtered_results = []
-        
-        for idx in sorted_indices:
-            if similarities[idx] >= min_similarity and len(filtered_results) < limit:
-                filtered_results.append(self.products[idx])
-            elif len(filtered_results) >= limit:
-                break
+        # Sort by score and return top results
+        scored_products.sort(key=lambda x: x[1], reverse=True)
+        filtered_results = [product for product, score in scored_products[:limit]]
         
         return filtered_results
 

@@ -12,13 +12,53 @@ from app.core.config import settings
 
 class BlogService:
     def __init__(self):
-        """Initialize the blog service with TF-IDF indexing"""
+        """Initialize the blog service with intelligent category-based matching"""
         self.blogs: List[BlogEntry] = []
         self.tfidf_vectorizer: Optional[TfidfVectorizer] = None
         self.tfidf_matrix = None
         self.processed_content = []
         self._load_blogs()
         self._build_search_index()
+        
+        # Domain-specific keyword mappings for better blog category matching
+        self.category_keywords = {
+            'safe': [
+                'safety', 'home safety', 'fall prevention', 'grab bars', 'handrails',
+                'lighting', 'lights', 'bathroom safety', 'kitchen safety', 'stairs',
+                'ramps', 'modification', 'accessibility', 'home modification',
+                'safety equipment', 'non-slip', 'secure', 'protection', 'hazard',
+                'accident prevention', 'emergency', 'fire safety', 'carbon monoxide',
+                'smoke detector', 'security', 'locks', 'doorbell', 'motion sensor',
+                'stair lift', 'shower seat', 'toilet safety', 'walker', 'cane'
+            ],
+            'healthy': [
+                'health', 'medical', 'medication', 'doctor', 'healthcare', 'chronic',
+                'condition', 'disease', 'treatment', 'therapy', 'nutrition', 'diet',
+                'exercise', 'fitness', 'wellness', 'mental health', 'depression',
+                'anxiety', 'sleep', 'pain management', 'hospice', 'palliative',
+                'end of life', 'terminal', 'comfort care', 'symptom management',
+                'quality of life', 'medical equipment', 'oxygen', 'CPAP', 'diabetes',
+                'heart disease', 'stroke', 'dementia', 'alzheimer', 'memory'
+            ],
+            'prepared': [
+                'emergency', 'planning', 'preparation', 'disaster', 'evacuation',
+                'emergency kit', 'supplies', 'legal', 'documents', 'will', 'trust',
+                'power of attorney', 'advance directive', 'financial planning',
+                'insurance', 'medicare', 'medicaid', 'benefits', 'estate planning',
+                'guardianship', 'conservatorship', 'elder law', 'attorney', 'lawyer',
+                'legal advice', 'probate', 'inheritance', 'tax planning', 'retirement',
+                'social security', 'pension', 'investment', 'savings', 'budget'
+            ],
+            'caregiver_care': [
+                'caregiver', 'caregiving', 'caregiver stress', 'caregiver burnout',
+                'respite care', 'support', 'self-care', 'caregiver support',
+                'family caregiver', 'caring for elderly', 'caregiver resources',
+                'caregiver health', 'caregiver wellness', 'support groups',
+                'counseling', 'therapy', 'grief', 'bereavement', 'loss',
+                'emotional support', 'mental health', 'stress management',
+                'work-life balance', 'caregiver tips', 'caregiver advice'
+            ]
+        }
     
     def _parse_firestore_date(self, date_obj) -> Optional[datetime]:
         """Parse Firestore date format with __time__ field"""
@@ -124,21 +164,68 @@ class BlogService:
         
         return text
 
+    def _calculate_category_score(self, query: str, blog: BlogEntry) -> float:
+        """Calculate category relevance score based on domain keywords"""
+        query_lower = query.lower()
+        max_score = 0.0
+        
+        # Check each category and its keywords
+        for category, keywords in self.category_keywords.items():
+            if blog.category.lower() == category or category in blog.category.lower():
+                # Calculate keyword match score for this category
+                keyword_matches = sum(1 for keyword in keywords if keyword in query_lower)
+                if keyword_matches > 0:
+                    # Score based on percentage of keywords matched and relevance
+                    category_score = (keyword_matches / len(keywords)) * 10
+                    max_score = max(max_score, category_score)
+        
+        return max_score
+
+    def _calculate_direct_keyword_score(self, query: str, blog: BlogEntry) -> float:
+        """Calculate direct keyword matching score"""
+        query_lower = query.lower()
+        score = 0.0
+        
+        # Check title for direct matches (highest weight)
+        if any(word in blog.title.lower() for word in query_lower.split()):
+            score += 5.0
+        
+        # Check tags for matches
+        for tag in blog.tags:
+            if tag.lower() in query_lower:
+                score += 3.0
+        
+        # Check summary for matches
+        if blog.summary and any(word in blog.summary.lower() for word in query_lower.split()):
+            score += 2.0
+        
+        # Key phrases that should boost relevance
+        key_phrases = [
+            'safety', 'lighting', 'grab bars', 'handrails', 'home modification',
+            'health', 'medication', 'caregiver', 'emergency planning', 'legal'
+        ]
+        
+        blog_text = f"{blog.title} {blog.summary or ''} {' '.join(blog.tags)}".lower()
+        for phrase in key_phrases:
+            if phrase in query_lower and phrase in blog_text:
+                score += 2.0
+        
+        return min(score, 10.0)  # Cap at 10
+
     def _build_search_index(self):
-        """Build TF-IDF index for all blog content"""
+        """Build TF-IDF index for all blog content with category emphasis"""
         if not self.blogs:
             return
         
         # Combine title, content, tags, summary, category, and subcategory for each blog
         self.processed_content = []
         for blog in self.blogs:
-            # Combine all text fields with appropriate weights
-            # Title gets the highest weight (3x), tags and summary get medium weight (2x), content gets base weight
-            combined_text = f"{blog.title} {blog.title} {blog.title} " + \
-                           f"{blog.category} {blog.category} " + \
-                           f"{blog.subcategory or ''} {blog.subcategory or ''} " + \
-                           f"{blog.summary or ''} {blog.summary or ''} " + \
-                           f"{' '.join(blog.tags)} {' '.join(blog.tags)} " + \
+            # Emphasize category and title much more
+            combined_text = f"{blog.category} " * 8 + \
+                           f"{blog.subcategory or ''} " * 5 + \
+                           f"{blog.title} " * 5 + \
+                           f"{blog.summary or ''} " * 3 + \
+                           f"{' '.join(blog.tags)} " * 3 + \
                            f"{blog.content}"
             
             processed = self._preprocess_text(combined_text)
@@ -146,48 +233,64 @@ class BlogService:
         
         # Initialize TF-IDF vectorizer with optimized parameters
         self.tfidf_vectorizer = TfidfVectorizer(
-            max_features=5000,  # Limit vocabulary size
+            max_features=3000,  # Smaller vocabulary for better focus
             stop_words='english',  # Remove common English stop words
-            ngram_range=(1, 2),  # Use both unigrams and bigrams
+            ngram_range=(1, 3),  # Include trigrams for better phrase matching
             min_df=1,  # Minimum document frequency
-            max_df=0.9,  # Maximum document frequency (filter out very common terms)
+            max_df=0.8,  # Maximum document frequency
             sublinear_tf=True,  # Apply sublinear tf scaling
             norm='l2'  # Normalize vectors
         )
         
         # Build TF-IDF matrix
-        self.tfidf_matrix = self.tfidf_vectorizer.fit_transform(self.processed_content)
+        if self.processed_content:
+            try:
+                self.tfidf_matrix = self.tfidf_vectorizer.fit_transform(self.processed_content)
+            except Exception as e:
+                print(f"Error building TF-IDF matrix: {e}")
+                # Fallback to simpler configuration
+                self.tfidf_vectorizer = TfidfVectorizer(
+                    stop_words=None,
+                    ngram_range=(1, 1),
+                    min_df=1,
+                    max_df=1.0
+                )
+                self.tfidf_matrix = self.tfidf_vectorizer.fit_transform(self.processed_content)
 
     def get_all_blogs(self) -> BlogList:
         """Get all blogs"""
         return BlogList(blogs=self.blogs, total=len(self.blogs))
 
     def search_blogs(self, query: str, limit: int = 10) -> BlogList:
-        """Search blogs using TF-IDF similarity"""
-        if not query or not self.blogs or self.tfidf_matrix is None:
+        """Search blogs using hybrid scoring (category + keywords + TF-IDF)"""
+        if not query or not self.blogs:
             return BlogList(blogs=[], total=0)
         
-        # Preprocess query
-        processed_query = self._preprocess_text(query)
+        scored_blogs = []
         
-        # Transform query to TF-IDF vector
-        query_vector = self.tfidf_vectorizer.transform([processed_query])
+        for i, blog in enumerate(self.blogs):
+            # Calculate multiple scores
+            category_score = self._calculate_category_score(query, blog)
+            direct_keyword_score = self._calculate_direct_keyword_score(query, blog)
+            
+            # TF-IDF score
+            tfidf_score = 0.0
+            if self.tfidf_matrix is not None:
+                processed_query = self._preprocess_text(query)
+                query_vector = self.tfidf_vectorizer.transform([processed_query])
+                similarities = cosine_similarity(query_vector, self.tfidf_matrix).flatten()
+                tfidf_score = similarities[i] * 10  # Scale to 0-10
+            
+            # Combined score with weights
+            # Category matching is most important, then direct keywords, then TF-IDF
+            combined_score = (category_score * 0.5) + (direct_keyword_score * 0.3) + (tfidf_score * 0.2)
+            
+            if combined_score > 0.5:  # Minimum threshold
+                scored_blogs.append((blog, combined_score))
         
-        # Calculate cosine similarity
-        similarities = cosine_similarity(query_vector, self.tfidf_matrix).flatten()
-        
-        # Get indices sorted by similarity (descending)
-        sorted_indices = similarities.argsort()[::-1]
-        
-        # Filter results with minimum similarity threshold
-        min_similarity = 0.2  # Balanced threshold for search
-        filtered_results = []
-        
-        for idx in sorted_indices:
-            if similarities[idx] >= min_similarity and len(filtered_results) < limit:
-                filtered_results.append(self.blogs[idx])
-            elif len(filtered_results) >= limit:
-                break
+        # Sort by score and return top results
+        scored_blogs.sort(key=lambda x: x[1], reverse=True)
+        filtered_results = [blog for blog, score in scored_blogs[:limit]]
         
         return BlogList(blogs=filtered_results, total=len(filtered_results))
 
@@ -216,68 +319,75 @@ class BlogService:
         return None
 
     def get_recommendations(self, query: str, limit: int = 5) -> BlogList:
-        """Get blog recommendations based on query using TF-IDF similarity"""
-        if not query or not self.blogs or self.tfidf_matrix is None:
+        """Get blog recommendations based on query using hybrid scoring"""
+        if not query or not self.blogs:
             return BlogList(blogs=[], total=0)
         
-        # Preprocess query
-        processed_query = self._preprocess_text(query)
+        scored_blogs = []
         
-        # Transform query to TF-IDF vector
-        query_vector = self.tfidf_vectorizer.transform([processed_query])
+        for i, blog in enumerate(self.blogs):
+            # Calculate multiple scores
+            category_score = self._calculate_category_score(query, blog)
+            direct_keyword_score = self._calculate_direct_keyword_score(query, blog)
+            
+            # TF-IDF score
+            tfidf_score = 0.0
+            if self.tfidf_matrix is not None:
+                processed_query = self._preprocess_text(query)
+                query_vector = self.tfidf_vectorizer.transform([processed_query])
+                similarities = cosine_similarity(query_vector, self.tfidf_matrix).flatten()
+                tfidf_score = similarities[i] * 10  # Scale to 0-10
+            
+            # Combined score with weights favoring category matching
+            combined_score = (category_score * 0.6) + (direct_keyword_score * 0.3) + (tfidf_score * 0.1)
+            
+            if combined_score > 1.0:  # Higher threshold for recommendations
+                scored_blogs.append((blog, combined_score))
         
-        # Calculate cosine similarity
-        similarities = cosine_similarity(query_vector, self.tfidf_matrix).flatten()
-        
-        # Get indices sorted by similarity (descending)
-        sorted_indices = similarities.argsort()[::-1]
-        
-        # Filter results with minimum similarity threshold
-        min_similarity = 0.25  # Balanced threshold for recommendations
-        recommended_blogs = []
-        
-        for idx in sorted_indices:
-            if similarities[idx] >= min_similarity and len(recommended_blogs) < limit:
-                recommended_blogs.append(self.blogs[idx])
-            elif len(recommended_blogs) >= limit:
-                break
+        # Sort by score and return top results
+        scored_blogs.sort(key=lambda x: x[1], reverse=True)
+        recommended_blogs = [blog for blog, score in scored_blogs[:limit]]
         
         return BlogList(blogs=recommended_blogs, total=len(recommended_blogs))
 
     def recommend_best_blog_with_score(self, query: str) -> tuple[Optional[BlogEntry], float]:
-        """Get the best blog recommendation with TF-IDF similarity score"""
-        if not query or not self.blogs or self.tfidf_matrix is None:
+        """Get the best blog recommendation with hybrid scoring"""
+        if not query or not self.blogs:
             return None, 0.0
         
-        # Preprocess query
-        processed_query = self._preprocess_text(query)
+        best_blog = None
+        best_score = 0.0
         
-        # Transform query to TF-IDF vector
-        query_vector = self.tfidf_vectorizer.transform([processed_query])
+        for i, blog in enumerate(self.blogs):
+            # Calculate multiple scores
+            category_score = self._calculate_category_score(query, blog)
+            direct_keyword_score = self._calculate_direct_keyword_score(query, blog)
+            
+            # TF-IDF score
+            tfidf_score = 0.0
+            if self.tfidf_matrix is not None:
+                processed_query = self._preprocess_text(query)
+                query_vector = self.tfidf_vectorizer.transform([processed_query])
+                similarities = cosine_similarity(query_vector, self.tfidf_matrix).flatten()
+                tfidf_score = similarities[i] * 10  # Scale to 0-10
+            
+            # Combined score with heavy emphasis on category matching
+            combined_score = (category_score * 0.7) + (direct_keyword_score * 0.2) + (tfidf_score * 0.1)
+            
+            if combined_score > best_score:
+                best_score = combined_score
+                best_blog = blog
         
-        # Calculate cosine similarity
-        similarities = cosine_similarity(query_vector, self.tfidf_matrix).flatten()
-        
-        # Find the best match
-        best_idx = similarities.argmax()
-        best_similarity = similarities[best_idx]
-        
-        # Convert cosine similarity to a more intuitive score (0-10)
-        score = best_similarity * 10
-        
-        # Set minimum relevance threshold (adjust as needed)
-        min_relevance_score = 1.5  # Equivalent to 15% cosine similarity - balanced threshold
-        
-        if score >= min_relevance_score:
-            return self.blogs[best_idx], score
-        
-        return None, 0.0
+        return best_blog, best_score
 
     def get_best_recommendation(self, query: str) -> Optional[str]:
         """Get the single best blog recommendation source_id based on query with threshold"""
         blog, score = self.recommend_best_blog_with_score(query)
         
-        if blog and score >= 1.5:  # Minimum threshold - balanced for good quality
+        # Set minimum relevance threshold - higher for quality
+        min_relevance_score = 2.0  # Require meaningful category or keyword matching
+        
+        if blog and score >= min_relevance_score:
             return blog.source_id
         
         return None
