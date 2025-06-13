@@ -97,7 +97,7 @@ async def get_ai_recommendation(query: str = Query(..., description="Query for A
             "variants": product.variants,
             "url": product_url,
             "score": float(score),
-            "threshold_met": bool(score >= 0.3)
+            "threshold_met": bool(score >= 3.0)
         }
     except HTTPException:
         raise
@@ -122,7 +122,7 @@ async def get_ai_recommendation_debug(query: str = Query(..., description="Query
             "available": product.available,
             "tags": product.tags,
             "score": float(score),
-            "threshold_met": bool(score >= 0.3)
+            "threshold_met": bool(score >= 3.0)
         }
     except Exception as e:
         logger.error(f"Error in debug endpoint: {str(e)}")

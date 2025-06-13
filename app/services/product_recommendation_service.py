@@ -48,6 +48,13 @@ class ProductRecommendationService:
                 'medical alert', 'pill dispenser', 'medication organizer',
                 'first aid', 'medical supplies', 'health monitor'
             ],
+            'medication_management': [
+                'pill dispenser', 'medication organizer', 'pill box', 'pill reminder',
+                'medication alarm', 'pill sorter', 'weekly pill organizer',
+                'daily pill organizer', 'medication tracker', 'pill container',
+                'medicine organizer', 'prescription organizer', 'medication box',
+                'pill case', 'medicine box', 'medication dispenser', 'pill planner'
+            ],
             'comfort': [
                 'cushion', 'pillow', 'support cushion', 'back support',
                 'seat cushion', 'lumbar support', 'orthopedic pillow',
@@ -138,42 +145,111 @@ class ProductRecommendationService:
         return max_score
 
     def _calculate_direct_keyword_score(self, query: str, product: Product) -> float:
-        """Calculate direct keyword matching score"""
+        """Calculate direct keyword matching score with context awareness"""
         query_lower = query.lower()
         score = 0.0
         
         # Check title for direct matches (highest weight)
         title_words = product.title.lower().split()
         query_words = query_lower.split()
-        title_matches = sum(1 for word in query_words if any(word in title_word for title_word in title_words))
-        if title_matches > 0:
-            score += (title_matches / len(query_words)) * 6.0
         
-        # Check tags for matches
+        # CONTEXT-AWARE MATCHING: Only count meaningful matches
+        meaningful_title_matches = 0
+        for word in query_words:
+            if any(word in title_word for title_word in title_words):
+                if self._is_meaningful_product_match(word, query_lower, product):
+                    meaningful_title_matches += 1
+        
+        if meaningful_title_matches > 0:
+            score += (meaningful_title_matches / len(query_words)) * 6.0
+        
+        # Check tags for matches (with context awareness)
         for tag in product.tags:
             if tag.lower() in query_lower:
-                score += 3.0
+                if self._is_meaningful_product_match(tag.lower(), query_lower, product):
+                    score += 3.0
         
-        # Check description for matches
+        # Check description for matches (with context awareness)
         if product.description:
             description_text = self._strip_html(product.description).lower()
-            description_matches = sum(1 for word in query_words if word in description_text)
-            if description_matches > 0:
-                score += (description_matches / len(query_words)) * 2.0
+            meaningful_desc_matches = 0
+            for word in query_words:
+                if word in description_text:
+                    if self._is_meaningful_product_match(word, query_lower, product):
+                        meaningful_desc_matches += 1
+            
+            if meaningful_desc_matches > 0:
+                score += (meaningful_desc_matches / len(query_words)) * 2.0
         
-        # Key phrases that should boost relevance
-        key_phrases = [
-            'grab bars', 'handrails', 'lighting', 'lights', 'walker', 'wheelchair',
-            'safety', 'mobility', 'bathroom', 'shower', 'toilet', 'medical',
-            'exercise', 'therapy', 'support', 'aid', 'assistance'
-        ]
+        # Key phrases that should boost relevance (only if contextually appropriate)
+        relevant_phrases = self._get_relevant_product_phrases_for_query(query_lower)
         
         product_text = f"{product.title} {self._strip_html(product.description or '')} {' '.join(product.tags)}".lower()
-        for phrase in key_phrases:
+        for phrase in relevant_phrases:
             if phrase in query_lower and phrase in product_text:
                 score += 2.0
         
+        # NEGATIVE SCORING: Penalize completely irrelevant products
+        medication_keywords = ['medication', 'pill', 'prescription', 'drug', 'medicine']
+        query_is_medication = any(keyword in query_lower for keyword in medication_keywords)
+        
+        if query_is_medication:
+            # Penalize products that are clearly not medication-related
+            irrelevant_tags = ['briefs', 'incontinence', 'bariatric', 'overnight', 'adult diapers']
+            product_tags_lower = [tag.lower() for tag in product.tags]
+            if any(tag in product_tags_lower for tag in irrelevant_tags):
+                score -= 10.0  # Heavy penalty for irrelevant products
+        
         return min(score, 10.0)  # Cap at 10
+    
+    def _is_meaningful_product_match(self, word: str, query: str, product: Product) -> bool:
+        """Check if a word match is semantically meaningful for products"""
+        # Common words that can be misleading
+        generic_words = ['a', 'an', 'the', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by']
+        if word in generic_words:
+            return False
+        
+        # Context-specific checks
+        if word == 'management':
+            # Only meaningful if it's actually about medication management
+            product_text = f"{product.title} {self._strip_html(product.description or '')} {' '.join(product.tags)}".lower()
+            return 'medication' in product_text or 'pill' in product_text or 'prescription' in product_text
+        
+        if word == 'system':
+            # Only meaningful for certain product types
+            product_text = f"{product.title} {self._strip_html(product.description or '')} {' '.join(product.tags)}".lower()
+            relevant_contexts = ['medication', 'pill', 'organizer', 'dispenser', 'alert', 'monitoring', 'safety']
+            return any(context in product_text for context in relevant_contexts)
+        
+        if word == 'establish':
+            # This is often too generic for products
+            return False
+        
+        # For medication-related words, ensure the product is actually medication-related
+        medication_words = ['medication', 'pill', 'prescription', 'drug', 'medicine']
+        if word in medication_words:
+            product_text = f"{product.title} {self._strip_html(product.description or '')} {' '.join(product.tags)}".lower()
+            medication_product_indicators = ['dispenser', 'organizer', 'reminder', 'box', 'container', 'management']
+            return any(indicator in product_text for indicator in medication_product_indicators)
+        
+        return True  # Default to meaningful for other words
+    
+    def _get_relevant_product_phrases_for_query(self, query: str) -> List[str]:
+        """Get phrases that are relevant to the specific product query"""
+        all_phrases = [
+            'grab bars', 'handrails', 'lighting', 'lights', 'walker', 'wheelchair',
+            'safety', 'mobility', 'bathroom', 'shower', 'toilet', 'medical',
+            'exercise', 'therapy', 'support', 'aid', 'assistance', 'medication management',
+            'pill dispenser', 'medication organizer'
+        ]
+        
+        # Only return phrases that are actually relevant to the query
+        relevant_phrases = []
+        for phrase in all_phrases:
+            if any(word in query for word in phrase.split()):
+                relevant_phrases.append(phrase)
+        
+        return relevant_phrases
 
     def _build_search_index(self):
         """Build TF-IDF index for all product content with title and tags emphasis"""
@@ -267,8 +343,8 @@ class ProductRecommendationService:
         """Get the single best product recommendation handle based on query with threshold"""
         product, score = await self.recommend_best_product_with_score(query)
         
-        # Set minimum relevance threshold - very low for better coverage
-        min_relevance_score = 0.3  # Very permissive threshold for product matching
+        # Set minimum relevance threshold - MUCH HIGHER for quality
+        min_relevance_score = 3.0  # Require strong category and keyword matching
         
         if product and score >= min_relevance_score:
             return product.handle
@@ -305,7 +381,7 @@ class ProductRecommendationService:
                 # Fallback scoring without TF-IDF
                 combined_score = (category_score * 0.5) + (direct_keyword_score * 0.5)
             
-            if combined_score > 0.5:  # Lowered threshold for recommendations
+            if combined_score > 2.0:  # MUCH higher threshold for recommendations
                 scored_products.append((product, combined_score))
         
         # Sort by score and return top results
@@ -344,7 +420,7 @@ class ProductRecommendationService:
                 # Fallback scoring without TF-IDF
                 combined_score = (category_score * 0.4) + (direct_keyword_score * 0.6)
             
-            if combined_score > 0.3:  # Lower threshold for search
+            if combined_score > 1.5:  # Higher threshold for search
                 scored_products.append((product, combined_score))
         
         # Sort by score and return top results
