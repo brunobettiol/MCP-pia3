@@ -75,13 +75,30 @@ async def get_recommendations(
 
 @router.get("/ai/recommend/handle")
 async def get_ai_recommendation(query: str = Query(..., description="Query for AI recommendation")):
-    """Get single best product recommendation handle for AI/MCP"""
+    """Get comprehensive product recommendation information for AI/MCP"""
     try:
         service = ProductRecommendationService()
-        handle = await service.get_best_recommendation(query)
-        if not handle:
+        product, score = await service.recommend_best_product_with_score(query)
+        if not product:
             raise HTTPException(status_code=404, detail="No relevant product found")
-        return {"handle": handle}
+        
+        # Build product URL from handle
+        product_url = f"https://shop.piacareapp.com/products/{product.handle}"
+        
+        return {
+            "handle": product.handle,
+            "title": product.title,
+            "description": product.description,
+            "price": product.price,
+            "currency": product.currency,
+            "available": product.available,
+            "tags": product.tags,
+            "images": product.images,
+            "variants": product.variants,
+            "url": product_url,
+            "score": float(score),
+            "threshold_met": bool(score >= 0.3)
+        }
     except HTTPException:
         raise
     except Exception as e:
