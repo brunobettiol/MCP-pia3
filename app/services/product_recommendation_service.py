@@ -10,62 +10,103 @@ from app.services.shopify_service import ShopifyService
 
 class ProductRecommendationService:
     def __init__(self):
-        """Initialize the product recommendation service with intelligent keyword-based matching"""
+        """Initialize the product recommendation service optimized for eldercare queries"""
         self.products: List[Product] = []
         self.tfidf_vectorizer: Optional[TfidfVectorizer] = None
         self.tfidf_matrix = None
         self.processed_content = []
         self._loaded = False
         
-        # Domain-specific keyword mappings for better product matching
-        self.product_keywords = {
-            'mobility': [
-                'walker', 'wheelchair', 'cane', 'rollator', 'mobility scooter',
-                'walking stick', 'crutches', 'mobility aid', 'walking aid',
-                'transport chair', 'knee walker', 'mobility device'
+        # Eldercare-focused keyword mappings based on your question categories
+        self.eldercare_keywords = {
+            # SAFE Category - Home Safety & Fall Prevention
+            'stairs_safety': [
+                'stairs', 'stair', 'handrails', 'handrail', 'stair rail', 'stairway', 
+                'steps', 'step', 'railing', 'banister', 'stair safety'
             ],
             'bathroom_safety': [
-                'grab bars', 'shower seat', 'bath bench', 'toilet safety',
-                'raised toilet seat', 'commode', 'shower chair', 'bath rail',
-                'safety rail', 'bathroom safety', 'shower grab bar', 'tub rail',
-                'toilet rail', 'shower handle', 'bath handle', 'non-slip mat'
+                'grab bars', 'grab bar', 'bathroom', 'shower', 'toilet', 'bath', 
+                'shower seat', 'bath bench', 'toilet safety', 'raised toilet seat',
+                'commode', 'shower chair', 'bath rail', 'safety rail', 'tub rail',
+                'toilet rail', 'shower handle', 'bath handle', 'non-slip mat',
+                'shower grab bar', 'bathroom safety'
             ],
-            'home_safety': [
-                'handrails', 'stair rail', 'ramp', 'threshold ramp', 'door ramp',
-                'safety light', 'motion sensor light', 'night light', 'LED light',
-                'lighting', 'lights', 'illumination', 'bright light', 'lamp',
-                'flashlight', 'emergency light', 'pathway light', 'step light'
+            'lighting': [
+                'lighting', 'lights', 'light', 'illumination', 'bright light', 
+                'LED light', 'motion sensor light', 'night light', 'lamp',
+                'flashlight', 'emergency light', 'pathway light', 'step light',
+                'hallway light', 'stair light', 'adequate lighting'
             ],
-            'daily_living': [
-                'reacher', 'grabber', 'dressing aid', 'sock aid', 'shoe horn',
-                'button hook', 'zipper pull', 'jar opener', 'can opener',
-                'kitchen aid', 'eating utensils', 'adaptive utensils',
-                'large grip', 'easy grip', 'ergonomic', 'arthritis aid'
+            'fall_prevention': [
+                'fall', 'falls', 'fall prevention', 'tripping hazards', 'trip', 
+                'slip', 'balance', 'stability', 'safety', 'accident prevention',
+                'injury prevention', 'fall risk', 'fall safety'
             ],
-            'medical_equipment': [
-                'blood pressure monitor', 'thermometer', 'pulse oximeter',
-                'nebulizer', 'CPAP', 'oxygen concentrator', 'hospital bed',
-                'medical alert', 'pill dispenser', 'medication organizer',
-                'first aid', 'medical supplies', 'health monitor'
+            'mobility_aids': [
+                'cane', 'walker', 'wheelchair', 'rollator', 'mobility scooter',
+                'walking stick', 'crutches', 'mobility aid', 'walking aid',
+                'transport chair', 'knee walker', 'mobility device', 'mobility'
             ],
+            'emergency_response': [
+                'emergency', 'personal emergency response', 'medical alert',
+                'emergency system', 'alert system', 'emergency button',
+                'help button', 'panic button', 'emergency response'
+            ],
+            
+            # HEALTHY Category - Health & Medical Management
             'medication_management': [
+                'medication', 'pill', 'prescription', 'medicine', 'drug',
                 'pill dispenser', 'medication organizer', 'pill box', 'pill reminder',
                 'medication alarm', 'pill sorter', 'weekly pill organizer',
                 'daily pill organizer', 'medication tracker', 'pill container',
                 'medicine organizer', 'prescription organizer', 'medication box',
-                'pill case', 'medicine box', 'medication dispenser', 'pill planner'
+                'pill case', 'medicine box', 'medication dispenser', 'pill planner',
+                'medication management', 'pill organization', 'medication system'
             ],
-            'comfort': [
+            'health_monitoring': [
+                'blood pressure monitor', 'thermometer', 'pulse oximeter',
+                'health monitor', 'medical equipment', 'health screening',
+                'vital signs', 'blood pressure', 'temperature', 'pulse',
+                'oxygen saturation', 'health check', 'medical device'
+            ],
+            'chronic_conditions': [
+                'chronic', 'diabetes', 'arthritis', 'heart disease', 'COPD',
+                'hypertension', 'chronic pain', 'chronic condition',
+                'disease management', 'condition management'
+            ],
+            
+            # Functional Ability - Daily Living Aids
+            'bathing_assistance': [
+                'bathing', 'bath', 'shower', 'shower seat', 'bath bench',
+                'shower chair', 'bathing aid', 'shower assistance',
+                'bath assistance', 'bathing independently'
+            ],
+            'dressing_aids': [
+                'dressing', 'dress', 'undress', 'dressing aid', 'sock aid',
+                'shoe horn', 'button hook', 'zipper pull', 'clothing aid',
+                'dressing assistance', 'adaptive clothing'
+            ],
+            'transfer_aids': [
+                'transfer', 'bed', 'chair', 'transfer aid', 'lift', 'lifting',
+                'transfer board', 'transfer belt', 'gait belt', 'mobility transfer'
+            ],
+            'toilet_assistance': [
+                'toilet', 'toileting', 'commode', 'raised toilet seat',
+                'toilet safety', 'toilet aid', 'toilet assistance',
+                'bathroom assistance', 'toileting aid'
+            ],
+            
+            # General Daily Living
+            'daily_living': [
+                'reacher', 'grabber', 'jar opener', 'can opener', 'kitchen aid',
+                'eating utensils', 'adaptive utensils', 'large grip', 'easy grip',
+                'ergonomic', 'arthritis aid', 'daily living aid', 'independence'
+            ],
+            'comfort_support': [
                 'cushion', 'pillow', 'support cushion', 'back support',
                 'seat cushion', 'lumbar support', 'orthopedic pillow',
                 'memory foam', 'gel cushion', 'pressure relief',
                 'comfort pad', 'positioning aid'
-            ],
-            'exercise': [
-                'exercise equipment', 'resistance band', 'therapy ball',
-                'balance pad', 'yoga mat', 'stretching aid', 'fitness',
-                'physical therapy', 'rehabilitation', 'strength training',
-                'balance training', 'flexibility', 'workout'
             ]
         }
     
@@ -123,172 +164,105 @@ class ProductRecommendationService:
         
         return text
 
-    def _calculate_product_category_score(self, query: str, product: Product) -> float:
-        """Calculate product category relevance score based on domain keywords"""
+    def _calculate_eldercare_relevance_score(self, query: str, product: Product) -> float:
+        """Calculate eldercare relevance score based on domain-specific keywords"""
         query_lower = query.lower()
-        max_score = 0.0
+        product_text = f"{product.title} {self._strip_html(product.description or '')} {' '.join(product.tags)}".lower()
         
-        # Check each product category and its keywords
-        for category, keywords in self.product_keywords.items():
-            # Calculate keyword match score for this category
-            keyword_matches = sum(1 for keyword in keywords if keyword in query_lower)
-            if keyword_matches > 0:
-                # Check if product matches this category based on title, description, or tags
-                product_text = f"{product.title} {self._strip_html(product.description or '')} {' '.join(product.tags)}".lower()
-                category_matches = sum(1 for keyword in keywords if keyword in product_text)
-                
-                if category_matches > 0:
-                    # Score based on both query and product matching this category
-                    category_score = ((keyword_matches / len(keywords)) * (category_matches / len(keywords))) * 10
-                    max_score = max(max_score, category_score)
+        total_score = 0.0
         
-        return max_score
+        # Check each eldercare category
+        for category, keywords in self.eldercare_keywords.items():
+            query_matches = sum(1 for keyword in keywords if keyword in query_lower)
+            product_matches = sum(1 for keyword in keywords if keyword in product_text)
+            
+            if query_matches > 0 and product_matches > 0:
+                # Score based on relevance strength
+                category_score = min(query_matches * product_matches * 2.0, 10.0)
+                total_score += category_score
+        
+        return total_score
 
     def _calculate_direct_keyword_score(self, query: str, product: Product) -> float:
-        """Calculate direct keyword matching score with context awareness"""
+        """Calculate direct keyword matching score"""
         query_lower = query.lower()
         score = 0.0
         
-        # Check title for direct matches (highest weight)
-        title_words = product.title.lower().split()
-        query_words = query_lower.split()
+        # Split query into meaningful words (filter out very short words)
+        query_words = [word.strip() for word in query_lower.split() if len(word.strip()) > 2]
         
-        # CONTEXT-AWARE MATCHING: Only count meaningful matches
-        meaningful_title_matches = 0
+        if not query_words:
+            return 0.0
+        
+        # Check title for matches (highest weight)
+        title_words = product.title.lower().split()
+        title_matches = 0
         for word in query_words:
             if any(word in title_word for title_word in title_words):
-                if self._is_meaningful_product_match(word, query_lower, product):
-                    meaningful_title_matches += 1
+                title_matches += 1
         
-        if meaningful_title_matches > 0:
-            score += (meaningful_title_matches / len(query_words)) * 6.0
+        if title_matches > 0:
+            score += (title_matches / len(query_words)) * 8.0
         
-        # Check tags for matches (with context awareness)
+        # Check tags for matches
+        tag_matches = 0
         for tag in product.tags:
-            if tag.lower() in query_lower:
-                if self._is_meaningful_product_match(tag.lower(), query_lower, product):
-                    score += 3.0
+            tag_lower = tag.lower()
+            for word in query_words:
+                if word in tag_lower:
+                    tag_matches += 1
         
-        # Check description for matches (with context awareness)
+        if tag_matches > 0:
+            score += min(tag_matches / len(query_words), 1.0) * 6.0
+        
+        # Check description for matches
         if product.description:
             description_text = self._strip_html(product.description).lower()
-            meaningful_desc_matches = 0
+            desc_matches = 0
             for word in query_words:
                 if word in description_text:
-                    if self._is_meaningful_product_match(word, query_lower, product):
-                        meaningful_desc_matches += 1
+                    desc_matches += 1
             
-            if meaningful_desc_matches > 0:
-                score += (meaningful_desc_matches / len(query_words)) * 2.0
+            if desc_matches > 0:
+                score += (desc_matches / len(query_words)) * 3.0
         
-        # Key phrases that should boost relevance (only if contextually appropriate)
-        relevant_phrases = self._get_relevant_product_phrases_for_query(query_lower)
-        
-        product_text = f"{product.title} {self._strip_html(product.description or '')} {' '.join(product.tags)}".lower()
-        for phrase in relevant_phrases:
-            if phrase in query_lower and phrase in product_text:
-                score += 2.0
-        
-        # NEGATIVE SCORING: Penalize completely irrelevant products
-        medication_keywords = ['medication', 'pill', 'prescription', 'drug', 'medicine']
-        query_is_medication = any(keyword in query_lower for keyword in medication_keywords)
-        
-        if query_is_medication:
-            # Penalize products that are clearly not medication-related
-            irrelevant_tags = ['briefs', 'incontinence', 'bariatric', 'overnight', 'adult diapers']
-            product_tags_lower = [tag.lower() for tag in product.tags]
-            if any(tag in product_tags_lower for tag in irrelevant_tags):
-                score -= 10.0  # Heavy penalty for irrelevant products
-        
-        return min(score, 10.0)  # Cap at 10
-    
-    def _is_meaningful_product_match(self, word: str, query: str, product: Product) -> bool:
-        """Check if a word match is semantically meaningful for products"""
-        # Common words that can be misleading
-        generic_words = ['a', 'an', 'the', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by']
-        if word in generic_words:
-            return False
-        
-        # Context-specific checks
-        if word == 'management':
-            # Only meaningful if it's actually about medication management
-            product_text = f"{product.title} {self._strip_html(product.description or '')} {' '.join(product.tags)}".lower()
-            return 'medication' in product_text or 'pill' in product_text or 'prescription' in product_text
-        
-        if word == 'system':
-            # Only meaningful for certain product types
-            product_text = f"{product.title} {self._strip_html(product.description or '')} {' '.join(product.tags)}".lower()
-            relevant_contexts = ['medication', 'pill', 'organizer', 'dispenser', 'alert', 'monitoring', 'safety']
-            return any(context in product_text for context in relevant_contexts)
-        
-        if word == 'establish':
-            # This is often too generic for products
-            return False
-        
-        # For medication-related words, ensure the product is actually medication-related
-        medication_words = ['medication', 'pill', 'prescription', 'drug', 'medicine']
-        if word in medication_words:
-            product_text = f"{product.title} {self._strip_html(product.description or '')} {' '.join(product.tags)}".lower()
-            medication_product_indicators = ['dispenser', 'organizer', 'reminder', 'box', 'container', 'management']
-            return any(indicator in product_text for indicator in medication_product_indicators)
-        
-        return True  # Default to meaningful for other words
-    
-    def _get_relevant_product_phrases_for_query(self, query: str) -> List[str]:
-        """Get phrases that are relevant to the specific product query"""
-        all_phrases = [
-            'grab bars', 'handrails', 'lighting', 'lights', 'walker', 'wheelchair',
-            'safety', 'mobility', 'bathroom', 'shower', 'toilet', 'medical',
-            'exercise', 'therapy', 'support', 'aid', 'assistance', 'medication management',
-            'pill dispenser', 'medication organizer'
-        ]
-        
-        # Only return phrases that are actually relevant to the query
-        relevant_phrases = []
-        for phrase in all_phrases:
-            if any(word in query for word in phrase.split()):
-                relevant_phrases.append(phrase)
-        
-        return relevant_phrases
+        return score
 
     def _build_search_index(self):
-        """Build TF-IDF index for all product content with title and tags emphasis"""
+        """Build TF-IDF index for all product content"""
         if not self.products:
             return
         
         # Combine title, description, tags for each product with emphasis on title and tags
         self.processed_content = []
         for product in self.products:
-            # Emphasize title and tags much more than description
-            combined_text = f"{product.title} " * 8 + \
-                           f"{' '.join(product.tags)} " * 5 + \
+            # Emphasize title and tags more than description
+            combined_text = f"{product.title} " * 5 + \
+                           f"{' '.join(product.tags)} " * 3 + \
                            f"{self._strip_html(product.description or '')}"
             
             processed = self._preprocess_text(combined_text)
             self.processed_content.append(processed)
         
-        # Handle small datasets - skip TF-IDF if too few products
+        # Handle small datasets
         if len(self.processed_content) < 2:
             print(f"Skipping TF-IDF for small dataset ({len(self.processed_content)} products)")
             self.tfidf_matrix = None
             self.tfidf_vectorizer = None
             return
         
-        # Initialize TF-IDF vectorizer with optimized parameters
-        # Adjust parameters based on number of documents
+        # Initialize TF-IDF vectorizer with reasonable parameters
         num_docs = len(self.processed_content)
-        max_features = min(1000, num_docs * 20)  # Even smaller vocabulary for small datasets
-        min_df = 1  # Always include words that appear at least once
-        max_df = min(0.95, max(0.5, 1.0 - (2.0 / num_docs)))  # Ensure max_df > min_df and reasonable
+        max_features = min(2000, num_docs * 50)
         
         self.tfidf_vectorizer = TfidfVectorizer(
             max_features=max_features if max_features > 0 else None,
-            stop_words=None,  # Don't remove stop words for small datasets
-            ngram_range=(1, 2),  # Simpler ngrams for small datasets
-            min_df=min_df,
-            max_df=max_df,
-            sublinear_tf=True,  # Apply sublinear tf scaling
-            norm='l2'  # Normalize vectors
+            stop_words='english',
+            ngram_range=(1, 2),
+            min_df=1,
+            max_df=0.95,
+            sublinear_tf=True,
+            norm='l2'
         )
         
         # Build TF-IDF matrix
@@ -298,12 +272,11 @@ class ProductRecommendationService:
                 print(f"Built TF-IDF matrix for {len(self.processed_content)} products")
             except Exception as e:
                 print(f"Error building TF-IDF matrix: {e}")
-                # Fallback - disable TF-IDF for small datasets
                 self.tfidf_matrix = None
                 self.tfidf_vectorizer = None
 
     async def recommend_best_product_with_score(self, query: str) -> Tuple[Optional[Product], float]:
-        """Get the best product recommendation with hybrid scoring"""
+        """Get the best product recommendation with optimized scoring"""
         await self._ensure_loaded()
         
         if not query or not self.products:
@@ -314,7 +287,7 @@ class ProductRecommendationService:
         
         for i, product in enumerate(self.products):
             # Calculate multiple scores
-            category_score = self._calculate_product_category_score(query, product)
+            eldercare_score = self._calculate_eldercare_relevance_score(query, product)
             direct_keyword_score = self._calculate_direct_keyword_score(query, product)
             
             # TF-IDF score (only if matrix exists)
@@ -325,13 +298,11 @@ class ProductRecommendationService:
                 similarities = cosine_similarity(query_vector, self.tfidf_matrix).flatten()
                 tfidf_score = similarities[i] * 10  # Scale to 0-10
             
-            # Combined score - adjust weights based on whether TF-IDF is available
+            # Combined score with balanced weights
             if self.tfidf_matrix is not None:
-                # Normal scoring with TF-IDF
-                combined_score = (category_score * 0.5) + (direct_keyword_score * 0.4) + (tfidf_score * 0.1)
+                combined_score = (eldercare_score * 0.5) + (direct_keyword_score * 0.3) + (tfidf_score * 0.2)
             else:
-                # Fallback scoring without TF-IDF
-                combined_score = (category_score * 0.6) + (direct_keyword_score * 0.4)
+                combined_score = (eldercare_score * 0.6) + (direct_keyword_score * 0.4)
             
             if combined_score > best_score:
                 best_score = combined_score
@@ -340,11 +311,11 @@ class ProductRecommendationService:
         return best_product, best_score
 
     async def get_best_recommendation(self, query: str) -> Optional[str]:
-        """Get the single best product recommendation handle based on query with threshold"""
+        """Get the single best product recommendation handle with reasonable threshold"""
         product, score = await self.recommend_best_product_with_score(query)
         
-        # Set minimum relevance threshold - MUCH HIGHER for quality
-        min_relevance_score = 3.0  # Require strong category and keyword matching
+        # Much more reasonable threshold for eldercare queries
+        min_relevance_score = 2.0  # Lowered from 5.0 to actually return results
         
         if product and score >= min_relevance_score:
             return product.handle
@@ -352,7 +323,7 @@ class ProductRecommendationService:
         return None
 
     async def get_recommendations(self, query: str, limit: int = 5) -> List[Product]:
-        """Get product recommendations based on query using hybrid scoring"""
+        """Get product recommendations with optimized scoring"""
         await self._ensure_loaded()
         
         if not query or not self.products:
@@ -362,7 +333,7 @@ class ProductRecommendationService:
         
         for i, product in enumerate(self.products):
             # Calculate multiple scores
-            category_score = self._calculate_product_category_score(query, product)
+            eldercare_score = self._calculate_eldercare_relevance_score(query, product)
             direct_keyword_score = self._calculate_direct_keyword_score(query, product)
             
             # TF-IDF score (only if matrix exists)
@@ -373,15 +344,14 @@ class ProductRecommendationService:
                 similarities = cosine_similarity(query_vector, self.tfidf_matrix).flatten()
                 tfidf_score = similarities[i] * 10  # Scale to 0-10
             
-            # Combined score - adjust weights based on whether TF-IDF is available
+            # Combined score with balanced weights
             if self.tfidf_matrix is not None:
-                # Normal scoring with TF-IDF
-                combined_score = (category_score * 0.4) + (direct_keyword_score * 0.4) + (tfidf_score * 0.2)
+                combined_score = (eldercare_score * 0.4) + (direct_keyword_score * 0.4) + (tfidf_score * 0.2)
             else:
-                # Fallback scoring without TF-IDF
-                combined_score = (category_score * 0.5) + (direct_keyword_score * 0.5)
+                combined_score = (eldercare_score * 0.5) + (direct_keyword_score * 0.5)
             
-            if combined_score > 2.0:  # MUCH higher threshold for recommendations
+            # Much lower threshold to actually return recommendations
+            if combined_score > 1.0:  # Lowered from 2.0
                 scored_products.append((product, combined_score))
         
         # Sort by score and return top results
@@ -391,7 +361,7 @@ class ProductRecommendationService:
         return recommended_products
 
     async def search_products(self, query: str, limit: int = 10) -> List[Product]:
-        """Search products using hybrid scoring"""
+        """Search products with optimized scoring"""
         await self._ensure_loaded()
         
         if not query or not self.products:
@@ -401,7 +371,7 @@ class ProductRecommendationService:
         
         for i, product in enumerate(self.products):
             # Calculate multiple scores
-            category_score = self._calculate_product_category_score(query, product)
+            eldercare_score = self._calculate_eldercare_relevance_score(query, product)
             direct_keyword_score = self._calculate_direct_keyword_score(query, product)
             
             # TF-IDF score (only if matrix exists)
@@ -412,15 +382,14 @@ class ProductRecommendationService:
                 similarities = cosine_similarity(query_vector, self.tfidf_matrix).flatten()
                 tfidf_score = similarities[i] * 10  # Scale to 0-10
             
-            # Combined score - adjust weights based on whether TF-IDF is available
+            # Combined score with balanced weights
             if self.tfidf_matrix is not None:
-                # Normal scoring with TF-IDF
-                combined_score = (category_score * 0.3) + (direct_keyword_score * 0.4) + (tfidf_score * 0.3)
+                combined_score = (eldercare_score * 0.3) + (direct_keyword_score * 0.4) + (tfidf_score * 0.3)
             else:
-                # Fallback scoring without TF-IDF
-                combined_score = (category_score * 0.4) + (direct_keyword_score * 0.6)
+                combined_score = (eldercare_score * 0.4) + (direct_keyword_score * 0.6)
             
-            if combined_score > 1.5:  # Higher threshold for search
+            # Lower threshold for search to return more results
+            if combined_score > 0.5:  # Lowered from 1.5
                 scored_products.append((product, combined_score))
         
         # Sort by score and return top results

@@ -79,7 +79,13 @@ async def get_ai_recommendation(query: str = Query(..., description="Query for A
     try:
         service = ProductRecommendationService()
         product, score = await service.recommend_best_product_with_score(query)
-        if not product:
+        
+        # Define threshold for quality recommendations (matching service threshold)
+        threshold = 2.0  # Lowered from 5.0 to match the optimized service
+        threshold_met = bool(score >= threshold)
+        
+        # Only return product if threshold is met
+        if not product or not threshold_met:
             raise HTTPException(status_code=404, detail="No relevant product found")
         
         # Build product URL from handle
@@ -97,7 +103,7 @@ async def get_ai_recommendation(query: str = Query(..., description="Query for A
             "variants": product.variants,
             "url": product_url,
             "score": float(score),
-            "threshold_met": bool(score >= 3.0)
+            "threshold_met": threshold_met
         }
     except HTTPException:
         raise
@@ -122,7 +128,7 @@ async def get_ai_recommendation_debug(query: str = Query(..., description="Query
             "available": product.available,
             "tags": product.tags,
             "score": float(score),
-            "threshold_met": bool(score >= 3.0)
+            "threshold_met": bool(score >= 2.0)  # Updated to match new threshold
         }
     except Exception as e:
         logger.error(f"Error in debug endpoint: {str(e)}")

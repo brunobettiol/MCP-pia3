@@ -12,67 +12,124 @@ from app.core.config import settings
 
 class BlogService:
     def __init__(self):
-        """Initialize the blog service with enhanced TF-IDF semantic matching"""
+        """Initialize the blog service optimized for eldercare queries"""
         self.blogs: List[BlogEntry] = []
         self.tfidf_vectorizer: Optional[TfidfVectorizer] = None
         self.tfidf_matrix = None
         self.processed_content = []
         
-        # Enhanced stop words for better content filtering
-        self.custom_stop_words = {
-            'a', 'an', 'and', 'are', 'as', 'at', 'be', 'by', 'for', 'from',
-            'has', 'he', 'in', 'is', 'it', 'its', 'of', 'on', 'that', 'the',
-            'to', 'was', 'will', 'with', 'the', 'this', 'but', 'they', 'have',
-            'had', 'what', 'said', 'each', 'which', 'their', 'time', 'if',
-            'up', 'out', 'many', 'then', 'them', 'these', 'so', 'some', 'her',
-            'would', 'make', 'like', 'into', 'him', 'two', 'more', 'go', 'no',
-            'way', 'could', 'my', 'than', 'first', 'been', 'call', 'who',
-            'oil', 'sit', 'now', 'find', 'down', 'day', 'did', 'get', 'come',
-            'made', 'may', 'part'
-        }
-        
-        # Enhanced domain-specific keyword mappings for better blog category matching
-        self.category_keywords = {
-            'safe': [
-                'safety', 'lighting', 'lights', 'grab bars', 'handrails', 'fall prevention',
-                'home safety', 'bathroom safety', 'stair safety', 'mobility safety',
-                'emergency preparedness', 'safety equipment', 'accident prevention',
-                'home modification', 'safety assessment', 'hazard removal', 'secure',
-                'protection', 'safe environment', 'risk reduction', 'injury prevention',
-                'safety measures', 'safety tips', 'home security', 'elder safety'
+        # Eldercare-focused keyword mappings based on your question categories
+        self.eldercare_keywords = {
+            # SAFE Category - Home Safety & Fall Prevention
+            'home_safety': [
+                'home safety', 'safety', 'safe', 'fall prevention', 'falls', 'fall',
+                'accident prevention', 'injury prevention', 'home modification',
+                'safety assessment', 'hazard removal', 'risk reduction', 'secure',
+                'protection', 'safe environment', 'safety measures', 'safety tips',
+                'elder safety', 'senior safety'
             ],
-            'healthy': [
-                'health', 'medical', 'medication', 'doctor', 'healthcare', 'wellness',
-                'nutrition', 'exercise', 'fitness', 'mental health', 'physical health',
-                'chronic conditions', 'disease management', 'preventive care',
-                'health monitoring', 'medical appointments', 'health screening',
-                'treatment', 'therapy', 'rehabilitation', 'recovery', 'symptoms',
-                'diagnosis', 'medical care', 'health services', 'clinical care'
+            'stairs_safety': [
+                'stairs', 'stair', 'handrails', 'handrail', 'stair rail', 'stairway',
+                'steps', 'step', 'railing', 'banister', 'stair safety', 'staircase'
             ],
-            'prepared': [
-                'emergency planning', 'disaster preparedness', 'emergency kit',
-                'legal documents', 'advance directives', 'power of attorney',
-                'estate planning', 'financial planning', 'insurance', 'will',
-                'emergency contacts', 'medical information', 'important documents',
-                'preparation', 'planning ahead', 'future planning', 'readiness',
-                'contingency planning', 'documentation', 'legal preparation'
+            'bathroom_safety': [
+                'bathroom safety', 'grab bars', 'grab bar', 'bathroom', 'shower',
+                'toilet', 'bath', 'shower safety', 'bath safety', 'toilet safety',
+                'bathroom modification', 'shower grab bar', 'bath rail', 'tub rail'
             ],
-            'caregiver': [
-                'caregiver support', 'caregiver stress', 'caregiver burnout',
-                'respite care', 'caregiver resources', 'family caregiver',
-                'caregiver health', 'support groups', 'caregiver tips',
-                'caring for caregiver', 'caregiver wellness', 'caregiver education',
-                'caregiving challenges', 'caregiver assistance', 'caregiver guidance',
-                'caregiver training', 'caregiver relief', 'caregiver community'
+            'lighting_safety': [
+                'lighting', 'lights', 'light', 'illumination', 'adequate lighting',
+                'hallway lighting', 'stair lighting', 'night light', 'motion sensor',
+                'LED light', 'bright light', 'pathway light', 'emergency lighting'
+            ],
+            'mobility_safety': [
+                'mobility', 'mobility aid', 'walker', 'cane', 'wheelchair',
+                'rollator', 'walking aid', 'mobility device', 'mobility scooter',
+                'walking stick', 'crutches', 'transport chair'
+            ],
+            'emergency_preparedness': [
+                'emergency', 'emergency preparedness', 'emergency planning',
+                'personal emergency response', 'medical alert', 'emergency system',
+                'emergency kit', 'disaster preparedness', 'emergency contacts',
+                'emergency response', 'alert system', 'help button'
+            ],
+            
+            # HEALTHY Category - Health & Medical Management
+            'health_management': [
+                'health', 'healthcare', 'medical', 'wellness', 'health management',
+                'medical care', 'health services', 'preventive care', 'health screening',
+                'health monitoring', 'medical appointments', 'doctor visits',
+                'health check', 'medical checkup', 'health assessment'
+            ],
+            'chronic_conditions': [
+                'chronic conditions', 'chronic', 'diabetes', 'arthritis', 'heart disease',
+                'COPD', 'hypertension', 'chronic pain', 'disease management',
+                'condition management', 'chronic illness', 'medical conditions'
             ],
             'medication_management': [
-                'medication management', 'pill organization', 'medication safety',
-                'prescription management', 'medication adherence', 'drug interactions',
-                'medication reminders', 'pill dispensers', 'medication errors',
-                'pharmacy services', 'medication review', 'prescription drugs',
-                'medication side effects', 'medication storage', 'pill splitting',
-                'dosage management', 'medication scheduling', 'prescription tracking',
-                'medication compliance', 'drug safety', 'pharmaceutical care'
+                'medication', 'medication management', 'pill', 'prescription',
+                'medicine', 'drug', 'medication safety', 'pill organization',
+                'medication adherence', 'prescription management', 'dosage',
+                'medication reminders', 'pill dispenser', 'medication errors',
+                'drug interactions', 'pharmacy', 'medication review'
+            ],
+            'nutrition_health': [
+                'nutrition', 'diet', 'eating', 'meals', 'food', 'balanced meals',
+                'healthy eating', 'meal planning', 'grocery shopping', 'cooking',
+                'meal preparation', 'dietary needs', 'nutritional needs'
+            ],
+            'exercise_fitness': [
+                'exercise', 'physical activity', 'fitness', 'activity', 'movement',
+                'exercise routine', 'physical therapy', 'rehabilitation', 'therapy',
+                'strength training', 'balance training', 'flexibility', 'workout'
+            ],
+            'mental_health': [
+                'mental health', 'depression', 'anxiety', 'emotional health',
+                'cognitive problems', 'memory issues', 'dementia', 'alzheimer',
+                'mood', 'psychological', 'mental wellness', 'emotional wellness'
+            ],
+            'sleep_health': [
+                'sleep', 'sleep quality', 'sleeping', 'insomnia', 'sleep problems',
+                'sleep disorders', 'rest', 'sleep hygiene', 'sleep patterns'
+            ],
+            
+            # PREPARED Category - Planning & Legal
+            'advance_planning': [
+                'advance directives', 'living will', 'healthcare proxy', 'power of attorney',
+                'durable power of attorney', 'estate planning', 'will', 'trust',
+                'end-of-life care', 'end-of-life planning', 'legal documents',
+                'advance planning', 'future planning', 'legal preparation'
+            ],
+            'financial_planning': [
+                'financial planning', 'insurance', 'medicare', 'medicaid',
+                'long-term care insurance', 'financial plan', 'retirement planning',
+                'financial security', 'insurance coverage', 'supplemental insurance',
+                'financial assistance', 'benefits', 'social security'
+            ],
+            'care_planning': [
+                'care planning', 'long-term care', 'care needs', 'care options',
+                'living arrangements', 'independent living', 'assisted living',
+                'nursing home', 'home care', 'care decisions', 'care coordination'
+            ],
+            'document_organization': [
+                'important documents', 'document organization', 'medical records',
+                'financial records', 'legal documents', 'paperwork', 'records',
+                'documentation', 'file organization', 'document management'
+            ],
+            
+            # Caregiver Support
+            'caregiver_support': [
+                'caregiver', 'caregiver support', 'caregiver stress', 'caregiver burnout',
+                'family caregiver', 'caregiving', 'caregiver health', 'caregiver wellness',
+                'respite care', 'caregiver resources', 'caregiver education',
+                'caregiver training', 'support groups', 'caregiver assistance'
+            ],
+            
+            # Functional Abilities
+            'daily_living': [
+                'daily living', 'activities of daily living', 'ADL', 'independence',
+                'bathing', 'dressing', 'toileting', 'eating', 'mobility',
+                'personal care', 'self-care', 'functional ability', 'assistance'
             ]
         }
         
@@ -168,7 +225,7 @@ class BlogService:
         return clean_text
 
     def _preprocess_text(self, text: str) -> str:
-        """Enhanced text preprocessing for better TF-IDF performance"""
+        """Clean and preprocess text for better matching"""
         if not text:
             return ""
         
@@ -184,218 +241,148 @@ class BlogService:
         # Remove extra whitespace and normalize
         text = re.sub(r'\s+', ' ', text).strip()
         
-        # Remove custom stop words
-        words = text.split()
-        filtered_words = [word for word in words if word not in self.custom_stop_words and len(word) > 2]
-        
-        return ' '.join(filtered_words)
+        return text
 
-    def _calculate_category_score(self, query: str, blog: BlogEntry) -> float:
-        """Enhanced category relevance score with semantic understanding"""
+    def _calculate_eldercare_relevance_score(self, query: str, blog: BlogEntry) -> float:
+        """Calculate eldercare relevance score based on domain-specific keywords"""
         query_lower = query.lower()
-        max_score = 0.0
+        blog_text = f"{blog.title} {blog.summary or ''} {' '.join(blog.tags)} {blog.category}".lower()
         
-        # Check each category and its keywords
-        for category, keywords in self.category_keywords.items():
-            if blog.category.lower() == category or category in blog.category.lower():
-                # Calculate keyword match score for this category
-                keyword_matches = sum(1 for keyword in keywords if keyword in query_lower)
-                if keyword_matches > 0:
-                    # Enhanced scoring with diminishing returns for multiple matches
-                    base_score = min(keyword_matches / len(keywords), 0.8) * 12  # Increased max score
-                    
-                    # Bonus for exact category match in query
-                    if category.replace('_', ' ') in query_lower:
-                        base_score += 3.0
-                    
-                    # Bonus for subcategory relevance
-                    if blog.subcategory and any(word in query_lower for word in blog.subcategory.lower().split()):
-                        base_score += 2.0
-                    
-                    max_score = max(max_score, base_score)
+        total_score = 0.0
         
-        return max_score
+        # Check each eldercare category
+        for category, keywords in self.eldercare_keywords.items():
+            query_matches = sum(1 for keyword in keywords if keyword in query_lower)
+            blog_matches = sum(1 for keyword in keywords if keyword in blog_text)
+            
+            if query_matches > 0 and blog_matches > 0:
+                # Score based on relevance strength
+                category_score = min(query_matches * blog_matches * 2.0, 12.0)
+                total_score += category_score
+        
+        # Bonus for category matching
+        if blog.category:
+            category_keywords = {
+                'safe': ['safety', 'fall', 'home', 'bathroom', 'lighting', 'mobility', 'emergency'],
+                'healthy': ['health', 'medical', 'medication', 'chronic', 'nutrition', 'exercise', 'mental'],
+                'prepared': ['planning', 'legal', 'financial', 'insurance', 'documents', 'care'],
+                'caregiver': ['caregiver', 'support', 'stress', 'burnout', 'respite']
+            }
+            
+            blog_category = blog.category.lower()
+            if blog_category in category_keywords:
+                category_words = category_keywords[blog_category]
+                if any(word in query_lower for word in category_words):
+                    total_score += 5.0
+        
+        return total_score
 
     def _calculate_direct_keyword_score(self, query: str, blog: BlogEntry) -> float:
-        """Enhanced direct keyword matching with semantic context"""
+        """Calculate direct keyword matching score"""
         query_lower = query.lower()
         score = 0.0
         
-        # Preprocess query for better matching
-        query_words = [word for word in query_lower.split() if word not in self.custom_stop_words and len(word) > 2]
+        # Split query into meaningful words (filter out very short words)
+        query_words = [word.strip() for word in query_lower.split() if len(word.strip()) > 2]
         
         if not query_words:
             return 0.0
         
-        # Check title for direct matches (highest weight) with enhanced context awareness
-        title_words = self._preprocess_text(blog.title).split()
-        meaningful_title_matches = 0
-        
+        # Check title for matches (highest weight)
+        title_words = blog.title.lower().split()
+        title_matches = 0
         for word in query_words:
             if any(word in title_word for title_word in title_words):
-                if self._is_meaningful_blog_match(word, query_lower, blog):
-                    meaningful_title_matches += 1
+                title_matches += 1
         
-        if meaningful_title_matches > 0:
-            title_score = (meaningful_title_matches / len(query_words)) * 8.0  # Increased weight
-            score += title_score
+        if title_matches > 0:
+            score += (title_matches / len(query_words)) * 10.0
         
-        # Check tags for matches with enhanced weighting
+        # Check tags for matches
         tag_matches = 0
         for tag in blog.tags:
             tag_lower = tag.lower()
             for word in query_words:
-                if word in tag_lower and self._is_meaningful_blog_match(word, query_lower, blog):
+                if word in tag_lower:
                     tag_matches += 1
         
         if tag_matches > 0:
-            tag_score = min(tag_matches / len(query_words), 1.0) * 6.0  # Enhanced tag scoring
-            score += tag_score
+            score += min(tag_matches / len(query_words), 1.0) * 8.0
         
-        # Check summary for matches with improved context
+        # Check summary for matches
         if blog.summary:
-            summary_words = self._preprocess_text(blog.summary).split()
-            meaningful_summary_matches = 0
-            
+            summary_words = blog.summary.lower().split()
+            summary_matches = 0
             for word in query_words:
                 if any(word in summary_word for summary_word in summary_words):
-                    if self._is_meaningful_blog_match(word, query_lower, blog):
-                        meaningful_summary_matches += 1
+                    summary_matches += 1
             
-            if meaningful_summary_matches > 0:
-                summary_score = (meaningful_summary_matches / len(query_words)) * 4.0  # Increased weight
-                score += summary_score
+            if summary_matches > 0:
+                score += (summary_matches / len(query_words)) * 6.0
         
-        # Enhanced phrase matching with better context
-        relevant_phrases = self._get_relevant_blog_phrases_for_query(query_lower)
-        blog_text = f"{blog.title} {blog.summary or ''} {' '.join(blog.tags)}".lower()
+        # Check category for matches
+        if blog.category:
+            category_lower = blog.category.lower()
+            for word in query_words:
+                if word in category_lower:
+                    score += 4.0
         
-        for phrase in relevant_phrases:
-            if phrase in query_lower and phrase in blog_text:
-                score += 3.0  # Increased phrase bonus
-        
-        # Improved negative scoring with more nuanced penalties
-        medication_keywords = ['medication', 'pill', 'prescription', 'drug', 'medicine', 'dosage', 'pharmacy']
-        query_is_medication = any(keyword in query_lower for keyword in medication_keywords)
-        
-        if query_is_medication:
-            # Check if blog is actually medication-related
-            blog_content = f"{blog.title} {blog.summary or ''} {' '.join(blog.tags)} {blog.category}".lower()
-            medication_indicators = ['medication', 'pill', 'prescription', 'drug', 'medicine', 'pharmacy', 'dosage', 'medical']
-            
-            if not any(indicator in blog_content for indicator in medication_indicators):
-                # Apply graduated penalty based on how off-topic the blog is
-                if blog.category in ['caregiver']:
-                    score -= 3.0  # Light penalty for related but not specific content
-                else:
-                    score -= 6.0  # Heavier penalty for unrelated content
-        
-        return max(score, 0.0)  # Ensure non-negative scores
-    
-    def _is_meaningful_blog_match(self, word: str, query: str, blog: BlogEntry) -> bool:
-        """Enhanced semantic meaningfulness check for blog matches"""
-        # Skip very short words and stop words
-        if len(word) <= 2 or word in self.custom_stop_words:
-            return False
-        
-        # Context-specific checks with improved logic
-        if word == 'management':
-            # Check for relevant management contexts
-            blog_content = f"{blog.title} {blog.summary or ''} {' '.join(blog.tags)} {blog.category}".lower()
-            management_contexts = ['medication', 'pill', 'prescription', 'care', 'health', 'chronic', 'condition']
-            return any(context in blog_content for context in management_contexts)
-        
-        if word == 'system':
-            # More nuanced system context checking
-            blog_content = f"{blog.title} {blog.summary or ''} {' '.join(blog.tags)}".lower()
-            system_contexts = ['medication', 'pill', 'safety', 'health', 'care', 'emergency', 'support', 'organization']
-            return any(context in blog_content for context in system_contexts)
-        
-        if word in ['establish', 'create', 'develop', 'implement']:
-            # These action words need specific context to be meaningful
-            return len([w for w in query.split() if w not in self.custom_stop_words]) > 2
-        
-        # Enhanced medication-related word validation
-        medication_words = ['medication', 'pill', 'prescription', 'drug', 'medicine', 'dosage', 'pharmacy']
-        if word in medication_words:
-            # Check if blog has medication-related content
-            blog_content = f"{blog.title} {blog.summary or ''} {' '.join(blog.tags)} {blog.category}".lower()
-            medication_indicators = ['medication', 'pill', 'prescription', 'drug', 'medicine', 'pharmacy', 'dosage', 'medical', 'health']
-            return any(indicator in blog_content for indicator in medication_indicators)
-        
-        return True  # Default to meaningful for other words
-    
-    def _get_relevant_blog_phrases_for_query(self, query: str) -> List[str]:
-        """Enhanced phrase relevance detection for blog queries"""
-        all_phrases = [
-            'home safety', 'fall prevention', 'medication management', 'pill organization',
-            'caregiver support', 'emergency planning', 'health monitoring', 'chronic conditions',
-            'safety equipment', 'lighting installation', 'grab bars', 'handrails',
-            'prescription management', 'medication safety', 'health screening',
-            'advance directives', 'estate planning', 'financial planning',
-            'caregiver burnout', 'respite care', 'support groups'
-        ]
-        
-        # Enhanced phrase matching with partial word matching
-        relevant_phrases = []
-        query_words = set(query.split())
-        
-        for phrase in all_phrases:
-            phrase_words = set(phrase.split())
-            # Include phrase if there's significant word overlap
-            if len(phrase_words.intersection(query_words)) >= min(2, len(phrase_words)):
-                relevant_phrases.append(phrase)
-        
-        return relevant_phrases
+        return score
 
     def _build_search_index(self):
-        """Enhanced TF-IDF index building with optimized parameters"""
+        """Build TF-IDF index for all blog content"""
         if not self.blogs:
             return
         
-        # Enhanced content combination with strategic emphasis
+        # Combine title, summary, tags, category for each blog with strategic emphasis
         self.processed_content = []
         for blog in self.blogs:
-            # Strategic emphasis: category and title get highest weight, then summary and tags
-            category_text = blog.category.replace('_', ' ')
+            # Strategic emphasis: category and title get highest weight
+            category_text = blog.category.replace('_', ' ') if blog.category else ''
             subcategory_text = blog.subcategory.replace('_', ' ') if blog.subcategory else ''
             
             # Build content with strategic repetition for TF-IDF
-            combined_text = f"{category_text} " * 12 + \
-                           f"{subcategory_text} " * 8 + \
-                           f"{blog.title} " * 10 + \
-                           f"{blog.summary or ''} " * 6 + \
-                           f"{' '.join(blog.tags)} " * 4 + \
-                           f"{blog.content[:500]}"  # Limit content to avoid overwhelming
+            combined_text = f"{category_text} " * 8 + \
+                           f"{subcategory_text} " * 6 + \
+                           f"{blog.title} " * 6 + \
+                           f"{blog.summary or ''} " * 4 + \
+                           f"{' '.join(blog.tags)} " * 3 + \
+                           f"{blog.content[:300]}"  # Limit content to avoid overwhelming
             
             processed = self._preprocess_text(combined_text)
             self.processed_content.append(processed)
         
-        # Enhanced TF-IDF vectorizer with optimized parameters
+        # Handle small datasets
+        if len(self.processed_content) < 2:
+            print(f"Skipping TF-IDF for small dataset ({len(self.processed_content)} blogs)")
+            self.tfidf_matrix = None
+            self.tfidf_vectorizer = None
+            return
+        
+        # Initialize TF-IDF vectorizer with reasonable parameters
         self.tfidf_vectorizer = TfidfVectorizer(
-            max_features=5000,  # Increased vocabulary size
-            stop_words=None,  # We handle stop words in preprocessing
-            ngram_range=(1, 3),  # Include trigrams for better phrase matching
-            min_df=1,  # Include all terms that appear at least once
-            max_df=0.85,  # Exclude terms that appear in >85% of documents
-            sublinear_tf=True,  # Apply sublinear tf scaling
-            norm='l2',  # L2 normalization
-            use_idf=True,  # Use inverse document frequency
-            smooth_idf=True,  # Smooth IDF weights
-            token_pattern=r'\b\w{3,}\b'  # Only include words with 3+ characters
+            max_features=3000,
+            stop_words='english',
+            ngram_range=(1, 3),
+            min_df=1,
+            max_df=0.85,
+            sublinear_tf=True,
+            norm='l2',
+            use_idf=True,
+            smooth_idf=True
         )
         
-        # Build TF-IDF matrix with error handling
+        # Build TF-IDF matrix
         if self.processed_content:
             try:
                 self.tfidf_matrix = self.tfidf_vectorizer.fit_transform(self.processed_content)
-                print(f"Built enhanced TF-IDF matrix for {len(self.processed_content)} blogs with {self.tfidf_matrix.shape[1]} features")
+                print(f"Built TF-IDF matrix for {len(self.processed_content)} blogs with {self.tfidf_matrix.shape[1]} features")
             except Exception as e:
                 print(f"Error building TF-IDF matrix: {e}")
                 # Fallback to simpler configuration
                 self.tfidf_vectorizer = TfidfVectorizer(
                     max_features=1000,
-                    stop_words=None,
+                    stop_words='english',
                     ngram_range=(1, 2),
                     min_df=1,
                     max_df=0.95
@@ -413,37 +400,38 @@ class BlogService:
         return BlogList(blogs=self.blogs, total=len(self.blogs))
 
     def search_blogs(self, query: str, limit: int = 10) -> BlogList:
-        """Enhanced blog search using hybrid scoring with improved TF-IDF"""
+        """Search blogs using optimized scoring"""
         if not query or not self.blogs:
             return BlogList(blogs=[], total=0)
         
         scored_blogs = []
         
         for i, blog in enumerate(self.blogs):
-            # Calculate enhanced scores
-            category_score = self._calculate_category_score(query, blog)
+            # Calculate scores
+            eldercare_score = self._calculate_eldercare_relevance_score(query, blog)
             direct_keyword_score = self._calculate_direct_keyword_score(query, blog)
             
-            # Enhanced TF-IDF score
+            # TF-IDF score
             tfidf_score = 0.0
             if self.tfidf_matrix is not None and self.tfidf_vectorizer is not None:
                 try:
                     processed_query = self._preprocess_text(query)
-                    if processed_query:  # Only proceed if query has meaningful content
+                    if processed_query:
                         query_vector = self.tfidf_vectorizer.transform([processed_query])
                         similarities = cosine_similarity(query_vector, self.tfidf_matrix).flatten()
-                        tfidf_score = similarities[i] * 15  # Increased scaling for better differentiation
+                        tfidf_score = similarities[i] * 12  # Scale for better differentiation
                 except Exception as e:
                     print(f"Error calculating TF-IDF score: {e}")
                     tfidf_score = 0.0
             
-            # Enhanced combined scoring with adaptive weights
-            if tfidf_score > 0.5:  # If TF-IDF found meaningful similarity
-                combined_score = (category_score * 0.4) + (direct_keyword_score * 0.3) + (tfidf_score * 0.3)
-            else:  # Fall back to category and keyword matching
-                combined_score = (category_score * 0.6) + (direct_keyword_score * 0.4)
+            # Combined scoring with balanced weights
+            if tfidf_score > 0.3:  # If TF-IDF found meaningful similarity
+                combined_score = (eldercare_score * 0.4) + (direct_keyword_score * 0.3) + (tfidf_score * 0.3)
+            else:  # Fall back to eldercare and keyword matching
+                combined_score = (eldercare_score * 0.6) + (direct_keyword_score * 0.4)
             
-            if combined_score > 1.0:  # Lowered threshold for search
+            # Lower threshold for search to return more results
+            if combined_score > 0.5:  # Much lower threshold
                 scored_blogs.append((blog, combined_score))
         
         # Sort by score and return top results
@@ -477,18 +465,18 @@ class BlogService:
         return None
 
     def get_recommendations(self, query: str, limit: int = 5) -> BlogList:
-        """Enhanced blog recommendations with improved scoring and higher thresholds"""
+        """Get blog recommendations with optimized scoring"""
         if not query or not self.blogs:
             return BlogList(blogs=[], total=0)
         
         scored_blogs = []
         
         for i, blog in enumerate(self.blogs):
-            # Calculate enhanced scores
-            category_score = self._calculate_category_score(query, blog)
+            # Calculate scores
+            eldercare_score = self._calculate_eldercare_relevance_score(query, blog)
             direct_keyword_score = self._calculate_direct_keyword_score(query, blog)
             
-            # Enhanced TF-IDF score
+            # TF-IDF score
             tfidf_score = 0.0
             if self.tfidf_matrix is not None and self.tfidf_vectorizer is not None:
                 try:
@@ -496,18 +484,19 @@ class BlogService:
                     if processed_query:
                         query_vector = self.tfidf_vectorizer.transform([processed_query])
                         similarities = cosine_similarity(query_vector, self.tfidf_matrix).flatten()
-                        tfidf_score = similarities[i] * 15  # Consistent scaling
+                        tfidf_score = similarities[i] * 12  # Consistent scaling
                 except Exception as e:
                     print(f"Error calculating TF-IDF score for recommendations: {e}")
                     tfidf_score = 0.0
             
-            # Enhanced combined scoring with emphasis on category matching for recommendations
-            if tfidf_score > 1.0:  # Higher TF-IDF threshold for recommendations
-                combined_score = (category_score * 0.5) + (direct_keyword_score * 0.3) + (tfidf_score * 0.2)
+            # Combined scoring with emphasis on eldercare matching for recommendations
+            if tfidf_score > 0.5:  # Higher TF-IDF threshold for recommendations
+                combined_score = (eldercare_score * 0.5) + (direct_keyword_score * 0.3) + (tfidf_score * 0.2)
             else:
-                combined_score = (category_score * 0.7) + (direct_keyword_score * 0.3)
+                combined_score = (eldercare_score * 0.7) + (direct_keyword_score * 0.3)
             
-            if combined_score > 6.0:  # Higher threshold for recommendations to ensure quality
+            # Lower threshold for recommendations to ensure results
+            if combined_score > 2.0:  # Much lower than previous 6.0
                 scored_blogs.append((blog, combined_score))
         
         # Sort by score and return top results
@@ -517,7 +506,7 @@ class BlogService:
         return BlogList(blogs=recommended_blogs, total=len(recommended_blogs))
 
     def recommend_best_blog_with_score(self, query: str) -> tuple[Optional[BlogEntry], float]:
-        """Enhanced best blog recommendation with improved hybrid scoring"""
+        """Get the best blog recommendation with optimized scoring"""
         if not query or not self.blogs:
             return None, 0.0
         
@@ -525,11 +514,11 @@ class BlogService:
         best_score = 0.0
         
         for i, blog in enumerate(self.blogs):
-            # Calculate enhanced scores
-            category_score = self._calculate_category_score(query, blog)
+            # Calculate scores
+            eldercare_score = self._calculate_eldercare_relevance_score(query, blog)
             direct_keyword_score = self._calculate_direct_keyword_score(query, blog)
             
-            # Enhanced TF-IDF score
+            # TF-IDF score
             tfidf_score = 0.0
             if self.tfidf_matrix is not None and self.tfidf_vectorizer is not None:
                 try:
@@ -537,16 +526,16 @@ class BlogService:
                     if processed_query:
                         query_vector = self.tfidf_vectorizer.transform([processed_query])
                         similarities = cosine_similarity(query_vector, self.tfidf_matrix).flatten()
-                        tfidf_score = similarities[i] * 15  # Consistent scaling
+                        tfidf_score = similarities[i] * 12  # Consistent scaling
                 except Exception as e:
                     print(f"Error calculating TF-IDF score for best recommendation: {e}")
                     tfidf_score = 0.0
             
-            # Enhanced combined scoring with heavy emphasis on category and semantic matching
-            if tfidf_score > 1.0:  # Meaningful TF-IDF similarity
-                combined_score = (category_score * 0.6) + (direct_keyword_score * 0.2) + (tfidf_score * 0.2)
+            # Combined scoring with heavy emphasis on eldercare matching
+            if tfidf_score > 0.5:  # Meaningful TF-IDF similarity
+                combined_score = (eldercare_score * 0.6) + (direct_keyword_score * 0.2) + (tfidf_score * 0.2)
             else:
-                combined_score = (category_score * 0.8) + (direct_keyword_score * 0.2)
+                combined_score = (eldercare_score * 0.8) + (direct_keyword_score * 0.2)
             
             if combined_score > best_score:
                 best_score = combined_score
@@ -555,11 +544,11 @@ class BlogService:
         return best_blog, best_score
 
     def get_best_recommendation(self, query: str) -> Optional[str]:
-        """Get the single best blog recommendation source_id with enhanced quality threshold"""
+        """Get the single best blog recommendation source_id with reasonable threshold"""
         blog, score = self.recommend_best_blog_with_score(query)
         
-        # Enhanced minimum relevance threshold for quality assurance
-        min_relevance_score = 7.0  # Increased threshold to ensure high-quality matches
+        # Much more reasonable threshold for eldercare queries
+        min_relevance_score = 2.0  # Lowered from 7.0 to actually return results
         
         if blog and score >= min_relevance_score:
             return blog.source_id
@@ -596,7 +585,7 @@ class BlogService:
 
     def recommend_blogs_for_product(self, product_handle: str, limit: int = 3) -> BlogList:
         """
-        Enhanced blog recommendations for products using improved TF-IDF similarity.
+        Blog recommendations for products using optimized eldercare matching.
         
         Args:
             product_handle: The product handle.
@@ -606,14 +595,10 @@ class BlogService:
             BlogList with recommended blogs.
         """
         try:
-            from app.services.shopify_service import ShopifyService
-            
-            # Get product information
-            shopify_service = ShopifyService()
             # Convert product handle to search query
             search_query = product_handle.replace('-', ' ')
             
-            # Find relevant blogs using enhanced recommendation system
+            # Find relevant blogs using optimized recommendation system
             return self.get_recommendations(search_query, limit)
             
         except Exception as e:

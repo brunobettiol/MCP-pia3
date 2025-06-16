@@ -11,7 +11,7 @@ from app.core.config import settings
 
 class ServiceService:
     def __init__(self):
-        """Initialize the service service with intelligent keyword-based matching"""
+        """Initialize the service service optimized for eldercare queries"""
         self.providers: List[ServiceProvider] = []
         self.tfidf_vectorizer: Optional[TfidfVectorizer] = None
         self.tfidf_matrix = None
@@ -19,103 +19,118 @@ class ServiceService:
         self._load_services()
         self._build_search_index()
         
-        # Domain-specific keyword mappings for better service matching
-        self.service_type_keywords = {
+        # Eldercare-focused keyword mappings based on your question categories
+        self.eldercare_service_keywords = {
+            # SAFE Category - Home Safety & Modifications
             'home_modification': [
-                'lighting', 'lights', 'grab bars', 'handrails', 'ramps', 'stair lift',
-                'bathroom modification', 'shower modification', 'accessibility',
-                'home safety', 'fall prevention', 'mobility access', 'door widening',
-                'threshold ramps', 'safety rails', 'home adaptation'
+                'home modification', 'home safety', 'safety modification', 'accessibility',
+                'grab bars', 'handrails', 'ramps', 'stair rail', 'bathroom modification',
+                'lighting installation', 'safety equipment', 'fall prevention',
+                'home improvement', 'accessibility modification', 'safety installation',
+                'grab bar installation', 'handrail installation', 'lighting upgrade',
+                'bathroom safety', 'stair safety', 'home accessibility'
             ],
-            'in_home_care': [
-                'caregiver', 'home care', 'personal care', 'companion care',
-                'elderly care', 'senior care', 'home health aide', 'care assistant',
-                'daily living assistance', 'meal preparation', 'medication reminders',
-                'transportation assistance', 'housekeeping', 'respite care'
+            'lighting_services': [
+                'lighting', 'lighting installation', 'electrical', 'LED installation',
+                'motion sensor lights', 'night lights', 'pathway lighting',
+                'stair lighting', 'hallway lighting', 'emergency lighting',
+                'bright lighting', 'adequate lighting', 'lighting upgrade',
+                'electrical services', 'lighting contractor'
+            ],
+            'handyman_services': [
+                'handyman', 'home repair', 'maintenance', 'installation services',
+                'home services', 'repair services', 'general contractor',
+                'home maintenance', 'property maintenance', 'fix', 'install',
+                'home improvement', 'contractor', 'skilled trades'
+            ],
+            
+            # HEALTHY Category - Health & Medical Services
+            'home_healthcare': [
+                'home healthcare', 'home health', 'nursing services', 'medical care',
+                'healthcare services', 'in-home care', 'skilled nursing',
+                'medical services', 'health services', 'nursing care',
+                'home nursing', 'medical assistance', 'healthcare provider',
+                'health aide', 'medical support'
+            ],
+            'medication_services': [
+                'medication management', 'pharmacy services', 'prescription delivery',
+                'medication delivery', 'pill organization', 'medication reminder',
+                'pharmaceutical services', 'medication assistance', 'drug management',
+                'prescription services', 'medication support', 'pharmacy delivery'
             ],
             'physical_therapy': [
-                'physical therapy', 'mobility', 'balance', 'strength', 'rehabilitation',
-                'exercise', 'movement', 'walking', 'gait training', 'fall prevention',
-                'muscle strengthening', 'range of motion', 'therapeutic exercise',
-                'recovery', 'injury rehabilitation', 'pain management'
+                'physical therapy', 'occupational therapy', 'rehabilitation',
+                'therapy services', 'PT', 'OT', 'therapeutic services',
+                'mobility therapy', 'exercise therapy', 'rehabilitation services',
+                'therapeutic exercise', 'recovery services', 'therapy'
             ],
-            'occupational_therapy': [
-                'occupational therapy', 'daily living skills', 'adaptive equipment',
-                'home safety assessment', 'cognitive rehabilitation', 'fine motor skills',
-                'activities of daily living', 'ADL training', 'equipment training',
-                'home modification assessment', 'functional assessment'
+            'mental_health_services': [
+                'mental health', 'counseling', 'therapy', 'psychological services',
+                'mental health services', 'behavioral health', 'psychiatric services',
+                'emotional support', 'mental wellness', 'counseling services',
+                'psychotherapy', 'mental health support'
             ],
-            'medical_equipment': [
-                'medical equipment', 'durable medical equipment', 'DME', 'mobility aids',
-                'wheelchairs', 'walkers', 'hospital beds', 'oxygen equipment',
-                'CPAP', 'medical supplies', 'prosthetics', 'orthotics'
+            
+            # PREPARED Category - Planning & Legal Services
+            'legal_services': [
+                'legal services', 'attorney', 'lawyer', 'legal advice',
+                'estate planning', 'will preparation', 'power of attorney',
+                'advance directives', 'legal documents', 'elder law',
+                'estate attorney', 'legal planning', 'legal assistance',
+                'legal counsel', 'legal consultation'
             ],
-            'elder_law': [
-                'elder law', 'estate planning', 'wills', 'power of attorney',
-                'guardianship', 'medicaid planning', 'legal documents', 'advance directives',
-                'living will', 'trust', 'probate', 'elder abuse', 'legal advice'
+            'financial_services': [
+                'financial planning', 'financial advisor', 'financial services',
+                'insurance services', 'retirement planning', 'financial consultation',
+                'financial assistance', 'insurance agent', 'financial planner',
+                'investment services', 'financial counseling', 'benefits assistance'
             ],
-            'financial_planning': [
-                'financial planning', 'retirement planning', 'investment', 'insurance',
-                'long term care insurance', 'medicare', 'social security', 'benefits',
-                'financial advisor', 'wealth management', 'estate planning'
+            'care_coordination': [
+                'care coordination', 'care management', 'case management',
+                'care planning', 'geriatric care management', 'care services',
+                'elder care coordination', 'care navigator', 'care consultant',
+                'care manager', 'senior care coordination'
             ],
-            'insurance': [
-                'insurance', 'health insurance', 'medicare', 'medicaid', 'long term care',
-                'disability insurance', 'life insurance', 'insurance broker',
-                'insurance agent', 'coverage', 'benefits', 'claims'
+            
+            # Caregiver Support Services
+            'caregiver_support': [
+                'caregiver support', 'respite care', 'caregiver services',
+                'family support', 'caregiver assistance', 'caregiver relief',
+                'support services', 'caregiver resources', 'respite services',
+                'caregiver education', 'caregiver training', 'support groups'
             ],
-            'palliative_care': [
-                'palliative care', 'comfort care', 'pain management', 'symptom management',
-                'quality of life', 'end of life care', 'hospice', 'terminal illness',
-                'chronic illness', 'advanced illness', 'supportive care'
+            
+            # Daily Living Support
+            'personal_care': [
+                'personal care', 'companion care', 'caregiving', 'home care',
+                'personal assistance', 'daily living assistance', 'care services',
+                'companion services', 'personal care services', 'home companion',
+                'care aide', 'personal care aide', 'home care aide'
             ],
-            'hospice': [
-                'hospice', 'end of life care', 'terminal care', 'comfort care',
-                'palliative care', 'bereavement', 'grief support', 'dying process',
-                'final care', 'compassionate care', 'spiritual care'
+            'housekeeping_services': [
+                'housekeeping', 'cleaning services', 'home cleaning',
+                'domestic services', 'house cleaning', 'cleaning',
+                'maid services', 'residential cleaning', 'home maintenance cleaning'
             ],
-            'grief_counseling': [
-                'grief counseling', 'bereavement', 'loss', 'mourning', 'grief support',
-                'counseling', 'therapy', 'emotional support', 'coping', 'healing',
-                'grief recovery', 'support groups', 'mental health'
+            'meal_services': [
+                'meal delivery', 'meal services', 'nutrition services',
+                'food delivery', 'meal preparation', 'cooking services',
+                'dietary services', 'meal planning', 'nutrition support',
+                'food services', 'meal assistance'
             ],
-            'assisted_living': [
-                'assisted living', 'senior living', 'retirement community', 'care facility',
-                'independent living', 'memory care', 'senior housing', 'residential care',
-                'adult care', 'senior community', 'care home'
-            ],
-            'nursing_home': [
-                'nursing home', 'skilled nursing', 'long term care facility', 'care facility',
-                'nursing facility', 'convalescent home', 'rehabilitation facility',
-                'extended care', 'residential care', 'institutional care'
-            ],
-            'transportation': [
+            'transportation_services': [
                 'transportation', 'medical transportation', 'senior transportation',
-                'wheelchair accessible', 'door to door', 'medical appointments',
-                'non-emergency transport', 'mobility transport', 'accessible vehicle'
+                'transport services', 'ride services', 'medical transport',
+                'transportation services', 'mobility services', 'travel assistance',
+                'transportation assistance', 'senior rides'
             ],
-            'meal_service': [
-                'meal delivery', 'meals on wheels', 'senior meals', 'nutrition',
-                'food delivery', 'meal preparation', 'dietary services', 'nutrition counseling',
-                'meal planning', 'senior nutrition', 'home delivered meals'
-            ],
-            'geriatric_medicine': [
-                'geriatric medicine', 'geriatrician', 'senior health', 'elderly care',
-                'age-related health', 'senior medical care', 'geriatric care',
-                'aging', 'senior wellness', 'elderly health', 'geriatric assessment'
-            ],
-            'at_home_tech': [
-                'technology', 'smart home', 'medical alert', 'emergency response',
-                'monitoring system', 'telehealth', 'remote monitoring', 'safety technology',
-                'home automation', 'assistive technology', 'digital health'
-            ],
-            'medication_management': [
-                'medication management', 'pill organization', 'medication reminders',
-                'prescription management', 'medication adherence', 'pill dispensing',
-                'medication monitoring', 'pharmacy services', 'medication review',
-                'drug interaction', 'medication safety', 'prescription delivery',
-                'medication synchronization', 'pill packaging', 'medication counseling'
+            
+            # Emergency Services
+            'emergency_services': [
+                'emergency services', 'medical alert', 'emergency response',
+                'alert services', 'emergency monitoring', 'safety monitoring',
+                'personal emergency response', 'emergency assistance',
+                'safety services', 'monitoring services'
             ]
         }
     
@@ -131,15 +146,22 @@ class ServiceService:
                 try:
                     with open(filepath, 'r', encoding='utf-8') as f:
                         data = json.load(f)
-                        # Handle the "providers" array structure
-                        if 'providers' in data:
-                            providers_data = data['providers']
-                        else:
-                            providers_data = data if isinstance(data, list) else [data]
                         
-                        for item in providers_data:
-                            provider = ServiceProvider(**item)
-                            self.providers.append(provider)
+                        # Handle different JSON structures
+                        if isinstance(data, list):
+                            for item in data:
+                                provider = ServiceProvider(**item)
+                                self.providers.append(provider)
+                        elif isinstance(data, dict):
+                            if 'providers' in data:
+                                for item in data['providers']:
+                                    provider = ServiceProvider(**item)
+                                    self.providers.append(provider)
+                            else:
+                                # Single provider object
+                                provider = ServiceProvider(**data)
+                                self.providers.append(provider)
+                                
                 except Exception as e:
                     print(f"Error loading {filename}: {e}")
 
@@ -147,12 +169,6 @@ class ServiceService:
         """Clean and preprocess text for better matching"""
         if not text:
             return ""
-        
-        # Remove HTML tags
-        text = re.sub(r'<[^>]+>', ' ', text)
-        
-        # Replace underscores with spaces for better word matching
-        text = text.replace('_', ' ')
         
         # Convert to lowercase
         text = text.lower()
@@ -162,237 +178,200 @@ class ServiceService:
         
         return text
 
-    def _calculate_service_type_score(self, query: str, provider: ServiceProvider) -> float:
-        """Calculate service type relevance score based on domain keywords and descriptions"""
+    def _calculate_eldercare_service_relevance_score(self, query: str, provider: ServiceProvider) -> float:
+        """Calculate eldercare service relevance score based on domain-specific keywords"""
         query_lower = query.lower()
-        max_score = 0.0
+        provider_text = f"{provider.name} {provider.description} {provider.detailedDescription} {provider.type} {' '.join(provider.types)} {' '.join(provider.serviceAreas)}".lower()
         
-        # Check each service type and its keywords
-        for service_type, keywords in self.service_type_keywords.items():
-            if provider.type == service_type or service_type in provider.types:
-                # Calculate keyword match score for this service type
-                keyword_matches = sum(1 for keyword in keywords if keyword in query_lower)
-                if keyword_matches > 0:
-                    # Also check if the provider's descriptions contain relevant keywords for this service type
-                    description_text = f"{provider.description} {provider.detailedDescription}".lower()
-                    description_keyword_matches = sum(1 for keyword in keywords if keyword in description_text)
-                    
-                    # Score based on both query matching and provider description relevance
-                    query_relevance = (keyword_matches / len(keywords)) * 8  # Increased from 5
-                    description_relevance = (description_keyword_matches / len(keywords)) * 3  # Reduced from 5
-                    type_score = query_relevance + description_relevance
-                    max_score = max(max_score, type_score)
-                else:
-                    # Even if no keyword matches, give some score for correct service type
-                    # This helps legitimate services with generic descriptions
-                    if self._is_query_relevant_to_service_type(query_lower, service_type):
-                        max_score = max(max_score, 4.0)  # Increased base score for correct type
+        total_score = 0.0
         
-        # NEGATIVE SCORING: Penalize completely mismatched service types
-        # If query is clearly about one domain but provider is in a completely different domain
-        medication_keywords = ['medication', 'pill', 'prescription', 'drug', 'medicine']
-        home_safety_keywords = ['lighting', 'lights', 'grab bars', 'handrails', 'safety modification']
-        care_keywords = ['caregiver', 'personal care', 'home care', 'companion care']
+        # Check each eldercare service category
+        for category, keywords in self.eldercare_service_keywords.items():
+            query_matches = sum(1 for keyword in keywords if keyword in query_lower)
+            provider_matches = sum(1 for keyword in keywords if keyword in provider_text)
+            
+            if query_matches > 0 and provider_matches > 0:
+                # Score based on relevance strength
+                category_score = min(query_matches * provider_matches * 2.0, 15.0)
+                total_score += category_score
         
-        query_is_medication = any(keyword in query_lower for keyword in medication_keywords)
-        query_is_home_safety = any(keyword in query_lower for keyword in home_safety_keywords)
-        query_is_care = any(keyword in query_lower for keyword in care_keywords)
+        # Bonus for service type matching
+        if provider.type:
+            service_type_keywords = {
+                'home_modification': ['modification', 'safety', 'accessibility', 'installation'],
+                'healthcare': ['health', 'medical', 'nursing', 'care'],
+                'legal': ['legal', 'attorney', 'lawyer', 'law'],
+                'financial': ['financial', 'insurance', 'planning'],
+                'personal_care': ['care', 'companion', 'assistance', 'support'],
+                'transportation': ['transportation', 'transport', 'ride', 'travel']
+            }
+            
+            provider_type = provider.type.lower()
+            for service_type, type_keywords in service_type_keywords.items():
+                if any(keyword in provider_type for keyword in type_keywords):
+                    if any(keyword in query_lower for keyword in type_keywords):
+                        total_score += 8.0
+                        break
         
-        # Apply penalties for mismatched types
-        if query_is_medication and provider.type in ['insurance', 'elder_law', 'financial_planning']:
-            max_score -= 10.0  # Heavy penalty
-        elif query_is_home_safety and provider.type in ['insurance', 'elder_law', 'financial_planning', 'in_home_care']:
-            max_score -= 8.0  # Heavy penalty
-        elif query_is_care and provider.type in ['insurance', 'elder_law', 'financial_planning', 'home_modification']:
-            max_score -= 6.0  # Moderate penalty
-        
-        return max_score
-    
-    def _is_query_relevant_to_service_type(self, query: str, service_type: str) -> bool:
-        """Check if a query is relevant to a service type even without exact keyword matches"""
-        home_modification_indicators = ['lighting', 'lights', 'grab bars', 'handrails', 'ramps', 'safety', 'modification', 'install', 'home improvement', 'improve']
-        in_home_care_indicators = ['caregiver', 'care', 'assistance', 'help', 'support', 'companion']
-        physical_therapy_indicators = ['therapy', 'rehabilitation', 'mobility', 'balance', 'exercise', 'movement']
-        
-        if service_type == 'home_modification':
-            return any(indicator in query for indicator in home_modification_indicators)
-        elif service_type == 'in_home_care':
-            return any(indicator in query for indicator in in_home_care_indicators)
-        elif service_type == 'physical_therapy':
-            return any(indicator in query for indicator in physical_therapy_indicators)
-        
-        return False
+        return total_score
 
     def _calculate_direct_keyword_score(self, query: str, provider: ServiceProvider) -> float:
-        """Calculate direct keyword matching score with heavy emphasis on descriptions and context awareness"""
+        """Calculate direct keyword matching score"""
         query_lower = query.lower()
         score = 0.0
         
-        # Check provider type directly (medium weight)
-        provider_type_readable = provider.type.replace('_', ' ')
-        if provider_type_readable in query_lower:
-            score += 3.0
+        # Split query into meaningful words (filter out very short words)
+        query_words = [word.strip() for word in query_lower.split() if len(word.strip()) > 2]
         
-        # Check descriptions for direct matches (HIGHEST WEIGHT - these are always filled)
-        description_text = f"{provider.description} {provider.detailedDescription}".lower()
-        query_words = query_lower.split()
+        if not query_words:
+            return 0.0
         
-        # CONTEXT-AWARE WORD MATCHING: Only count matches that make semantic sense
-        meaningful_matches = 0
-        total_words = len(query_words)
-        
+        # Check provider name for matches (highest weight)
+        name_words = provider.name.lower().split()
+        name_matches = 0
         for word in query_words:
-            if word in description_text:
-                # Check if this is a meaningful match based on context
-                if self._is_meaningful_match(word, query_lower, provider.type, description_text):
-                    meaningful_matches += 1
+            if any(word in name_word for name_word in name_words):
+                name_matches += 1
         
-        if meaningful_matches > 0:
-            score += (meaningful_matches / total_words) * 8.0  # Very high weight for meaningful matches
+        if name_matches > 0:
+            score += (name_matches / len(query_words)) * 12.0
         
-        # Phrase matching in descriptions (only relevant phrases)
-        relevant_phrases = self._get_relevant_phrases_for_query(query_lower)
+        # Check service type for matches
+        if provider.type:
+            type_words = provider.type.lower().split()
+            type_matches = 0
+            for word in query_words:
+                if any(word in type_word for type_word in type_words):
+                    type_matches += 1
+            
+            if type_matches > 0:
+                score += (type_matches / len(query_words)) * 10.0
         
-        for phrase in relevant_phrases:
-            if phrase in query_lower and phrase in description_text:
-                score += 4.0  # High bonus for phrase matches in descriptions
+        # Check service types (multiple) for matches
+        types_matches = 0
+        for service_type in provider.types:
+            type_words = service_type.lower().split()
+            for word in query_words:
+                if any(word in type_word for type_word in type_words):
+                    types_matches += 1
         
-        # Check name for matches (lower weight)
-        if any(word in provider.name.lower() for word in query_words):
-            score += 2.0
+        if types_matches > 0:
+            score += min(types_matches / len(query_words), 1.0) * 8.0
         
-        return min(score, 15.0)  # Increased cap to allow for higher description scores
-    
-    def _is_meaningful_match(self, word: str, query: str, provider_type: str, description: str) -> bool:
-        """Check if a word match is semantically meaningful given the context"""
-        # Common words that can be misleading
-        generic_words = ['a', 'an', 'the', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by']
-        if word in generic_words:
-            return False
+        # Check description for matches
+        if provider.description:
+            desc_words = provider.description.lower().split()
+            desc_matches = 0
+            for word in query_words:
+                if any(word in desc_word for desc_word in desc_words):
+                    desc_matches += 1
+            
+            if desc_matches > 0:
+                score += (desc_matches / len(query_words)) * 6.0
         
-        # Context-specific checks
-        if word == 'management':
-            # Only meaningful if it's in the right context
-            if provider_type == 'medication_management':
-                return True
-            elif provider_type in ['insurance', 'financial_planning', 'elder_law']:
-                # Check if it's about medication management specifically
-                return 'medication' in description or 'pill' in description or 'prescription' in description
-            return False
+        # Check detailed description for matches
+        if provider.detailedDescription:
+            detailed_desc_words = provider.detailedDescription.lower().split()
+            detailed_desc_matches = 0
+            for word in query_words:
+                if any(word in detailed_word for detailed_word in detailed_desc_words):
+                    detailed_desc_matches += 1
+            
+            if detailed_desc_matches > 0:
+                score += (detailed_desc_matches / len(query_words)) * 4.0
         
-        if word == 'system':
-            # Only meaningful for certain provider types
-            if provider_type in ['at_home_tech', 'medication_management', 'home_modification']:
-                return True
-            elif provider_type in ['insurance', 'financial_planning', 'elder_law']:
-                return False  # Insurance "systems" are not relevant to medication systems
-            return True
+        # Check service areas for matches
+        area_matches = 0
+        for area in provider.serviceAreas:
+            area_words = area.lower().split()
+            for word in query_words:
+                if any(word in area_word for area_word in area_words):
+                    area_matches += 1
         
-        if word == 'establish':
-            # This is often too generic
-            return len(word) > 4  # Only count longer, more specific words
+        if area_matches > 0:
+            score += min(area_matches / len(query_words), 1.0) * 3.0
         
-        # For other words, check if they're domain-specific
-        medication_words = ['medication', 'pill', 'prescription', 'drug', 'medicine', 'dosage', 'pharmacy']
-        if word in medication_words:
-            return provider_type in ['medication_management', 'geriatric_medicine', 'in_home_care', 'at_home_tech']
-        
-        return True  # Default to meaningful for other words
-    
-    def _get_relevant_phrases_for_query(self, query: str) -> List[str]:
-        """Get phrases that are relevant to the specific query"""
-        all_phrases = [
-            'home modification', 'lighting', 'grab bars', 'handrails', 'safety',
-            'physical therapy', 'occupational therapy', 'medical equipment',
-            'caregiver', 'home care', 'elder law', 'financial planning',
-            'insurance', 'palliative care', 'hospice', 'grief counseling',
-            'in-home care', 'assisted living', 'nursing home', 'transportation',
-            'meal service', 'geriatric medicine', 'at-home tech', 'medication management'
-        ]
-        
-        # Only return phrases that are actually relevant to the query
-        relevant_phrases = []
-        for phrase in all_phrases:
-            if any(word in query for word in phrase.split()):
-                relevant_phrases.append(phrase)
-        
-        return relevant_phrases
+        return score
 
     def _build_search_index(self):
-        """Build TF-IDF index for all service provider content with heavy emphasis on descriptions"""
+        """Build TF-IDF index for all service provider content"""
         if not self.providers:
             return
         
-        # Combine all text fields for each provider with HEAVY emphasis on descriptions
+        # Combine name, type, description, service areas for each provider with strategic emphasis
         self.processed_content = []
         for provider in self.providers:
-            # Emphasize descriptions much more since they're always filled and most relevant
-            service_type_text = provider.type.replace('_', ' ')
-            combined_text = f"{provider.description} " * 15 + \
-                           f"{provider.detailedDescription} " * 12 + \
-                           f"{service_type_text} " * 8 + \
-                           f"{provider.name} " * 5 + \
-                           f"{' '.join(provider.types)} " * 3 + \
-                           f"{' '.join(provider.services)} " * 2 + \
-                           f"{' '.join(provider.specialties)} " * 2
+            # Strategic emphasis: name and type get highest weight
+            combined_text = f"{provider.name} " * 6 + \
+                           f"{provider.type} " * 5 + \
+                           f"{' '.join(provider.types)} " * 4 + \
+                           f"{provider.description} " * 3 + \
+                           f"{provider.detailedDescription or ''} " * 2 + \
+                           f"{' '.join(provider.serviceAreas)}"
             
             processed = self._preprocess_text(combined_text)
             self.processed_content.append(processed)
         
-        # Initialize TF-IDF vectorizer with optimized parameters
+        # Handle small datasets
+        if len(self.processed_content) < 2:
+            print(f"Skipping TF-IDF for small dataset ({len(self.processed_content)} providers)")
+            self.tfidf_matrix = None
+            self.tfidf_vectorizer = None
+            return
+        
+        # Initialize TF-IDF vectorizer with reasonable parameters
         self.tfidf_vectorizer = TfidfVectorizer(
-            max_features=3000,  # Smaller vocabulary for better focus
-            stop_words='english',  # Remove common English stop words
-            ngram_range=(1, 3),  # Include trigrams for better phrase matching
-            min_df=1,  # Minimum document frequency
-            max_df=0.8,  # Maximum document frequency
-            sublinear_tf=True,  # Apply sublinear tf scaling
-            norm='l2'  # Normalize vectors
+            max_features=2000,
+            stop_words='english',
+            ngram_range=(1, 2),
+            min_df=1,
+            max_df=0.95,
+            sublinear_tf=True,
+            norm='l2'
         )
         
         # Build TF-IDF matrix
         if self.processed_content:
             try:
                 self.tfidf_matrix = self.tfidf_vectorizer.fit_transform(self.processed_content)
+                print(f"Built TF-IDF matrix for {len(self.processed_content)} service providers")
             except Exception as e:
                 print(f"Error building TF-IDF matrix: {e}")
-                # Fallback to simpler configuration
-                self.tfidf_vectorizer = TfidfVectorizer(
-                    stop_words=None,
-                    ngram_range=(1, 1),
-                    min_df=1,
-                    max_df=1.0
-                )
-                self.tfidf_matrix = self.tfidf_vectorizer.fit_transform(self.processed_content)
+                self.tfidf_matrix = None
+                self.tfidf_vectorizer = None
 
     def get_all_providers(self) -> ServiceList:
         """Get all service providers"""
         return ServiceList(providers=self.providers, total=len(self.providers))
 
     def search_providers(self, query: str, limit: int = 10) -> ServiceList:
-        """Search providers using hybrid scoring (service type + TF-IDF)"""
+        """Search providers using optimized scoring"""
         if not query or not self.providers:
             return ServiceList(providers=[], total=0)
         
         scored_providers = []
         
         for i, provider in enumerate(self.providers):
-            # Calculate multiple scores
-            service_type_score = self._calculate_service_type_score(query, provider)
+            # Calculate scores
+            eldercare_score = self._calculate_eldercare_service_relevance_score(query, provider)
             direct_keyword_score = self._calculate_direct_keyword_score(query, provider)
             
             # TF-IDF score
             tfidf_score = 0.0
-            if self.tfidf_matrix is not None:
+            if self.tfidf_matrix is not None and self.tfidf_vectorizer is not None:
                 processed_query = self._preprocess_text(query)
                 query_vector = self.tfidf_vectorizer.transform([processed_query])
                 similarities = cosine_similarity(query_vector, self.tfidf_matrix).flatten()
                 tfidf_score = similarities[i] * 10  # Scale to 0-10
             
-            # Combined score with weights - MORE emphasis on direct keyword matching (descriptions)
-            combined_score = (service_type_score * 0.3) + (direct_keyword_score * 0.5) + (tfidf_score * 0.2)
+            # Combined score with balanced weights
+            if tfidf_score > 0.3:
+                combined_score = (eldercare_score * 0.4) + (direct_keyword_score * 0.4) + (tfidf_score * 0.2)
+            else:
+                combined_score = (eldercare_score * 0.5) + (direct_keyword_score * 0.5)
             
-            if combined_score > 0.5:  # Minimum threshold
+            # Lower threshold for search to return more results
+            if combined_score > 0.5:  # Much lower threshold
                 scored_providers.append((provider, combined_score))
         
         # Sort by score and return top results
@@ -415,29 +394,33 @@ class ServiceService:
         return None
 
     def get_recommendations(self, query: str, limit: int = 5) -> ServiceList:
-        """Get service provider recommendations based on query using hybrid scoring"""
+        """Get service provider recommendations with optimized scoring"""
         if not query or not self.providers:
             return ServiceList(providers=[], total=0)
         
         scored_providers = []
         
         for i, provider in enumerate(self.providers):
-            # Calculate multiple scores
-            service_type_score = self._calculate_service_type_score(query, provider)
+            # Calculate scores
+            eldercare_score = self._calculate_eldercare_service_relevance_score(query, provider)
             direct_keyword_score = self._calculate_direct_keyword_score(query, provider)
             
             # TF-IDF score
             tfidf_score = 0.0
-            if self.tfidf_matrix is not None:
+            if self.tfidf_matrix is not None and self.tfidf_vectorizer is not None:
                 processed_query = self._preprocess_text(query)
                 query_vector = self.tfidf_vectorizer.transform([processed_query])
                 similarities = cosine_similarity(query_vector, self.tfidf_matrix).flatten()
                 tfidf_score = similarities[i] * 10  # Scale to 0-10
             
-            # Combined score with weights favoring direct keyword matching (descriptions)
-            combined_score = (service_type_score * 0.3) + (direct_keyword_score * 0.6) + (tfidf_score * 0.1)
+            # Combined score with emphasis on eldercare matching for recommendations
+            if tfidf_score > 0.5:
+                combined_score = (eldercare_score * 0.5) + (direct_keyword_score * 0.3) + (tfidf_score * 0.2)
+            else:
+                combined_score = (eldercare_score * 0.6) + (direct_keyword_score * 0.4)
             
-            if combined_score > 4.0:  # MUCH higher threshold for recommendations
+            # Lower threshold for recommendations to ensure results
+            if combined_score > 2.0:  # Much lower threshold
                 scored_providers.append((provider, combined_score))
         
         # Sort by score and return top results
@@ -447,7 +430,7 @@ class ServiceService:
         return ServiceList(providers=recommended_providers, total=len(recommended_providers))
 
     def recommend_best_provider_with_score(self, query: str) -> Tuple[Optional[ServiceProvider], float]:
-        """Get the best service provider recommendation with hybrid scoring"""
+        """Get the best service provider recommendation with optimized scoring"""
         if not query or not self.providers:
             return None, 0.0
         
@@ -455,20 +438,23 @@ class ServiceService:
         best_score = 0.0
         
         for i, provider in enumerate(self.providers):
-            # Calculate multiple scores
-            service_type_score = self._calculate_service_type_score(query, provider)
+            # Calculate scores
+            eldercare_score = self._calculate_eldercare_service_relevance_score(query, provider)
             direct_keyword_score = self._calculate_direct_keyword_score(query, provider)
             
             # TF-IDF score
             tfidf_score = 0.0
-            if self.tfidf_matrix is not None:
+            if self.tfidf_matrix is not None and self.tfidf_vectorizer is not None:
                 processed_query = self._preprocess_text(query)
                 query_vector = self.tfidf_vectorizer.transform([processed_query])
                 similarities = cosine_similarity(query_vector, self.tfidf_matrix).flatten()
                 tfidf_score = similarities[i] * 10  # Scale to 0-10
             
-            # Combined score with HEAVY emphasis on direct keyword matching (descriptions)
-            combined_score = (service_type_score * 0.2) + (direct_keyword_score * 0.7) + (tfidf_score * 0.1)
+            # Combined score with heavy emphasis on eldercare matching
+            if tfidf_score > 0.5:
+                combined_score = (eldercare_score * 0.6) + (direct_keyword_score * 0.2) + (tfidf_score * 0.2)
+            else:
+                combined_score = (eldercare_score * 0.7) + (direct_keyword_score * 0.3)
             
             if combined_score > best_score:
                 best_score = combined_score
@@ -477,11 +463,11 @@ class ServiceService:
         return best_provider, best_score
 
     def get_best_recommendation(self, query: str) -> Optional[str]:
-        """Get the single best service provider recommendation ID based on query with threshold"""
+        """Get the single best service provider recommendation ID with reasonable threshold"""
         provider, score = self.recommend_best_provider_with_score(query)
         
-        # Set minimum relevance threshold - MUCH HIGHER for quality
-        min_relevance_score = 5.0  # Require very strong service type and keyword matching
+        # Much more reasonable threshold for eldercare queries
+        min_relevance_score = 2.0  # Lowered from 5.0 to actually return results
         
         if provider and score >= min_relevance_score:
             return provider.id
@@ -527,51 +513,4 @@ class ServiceService:
         """Get providers filtered by service area"""
         filtered_providers = [provider for provider in self.providers 
                             if area.lower() in [a.lower() for a in provider.serviceAreas]]
-        return ServiceList(providers=filtered_providers, total=len(filtered_providers))
-
-    def recommend_services(self, query: str, limit: int = 5) -> List[Tuple[ServiceProvider, float]]:
-        """Recommend services based on query with improved scoring"""
-        if not self.providers:
-            return []
-        
-        scored_providers = []
-        
-        for provider in self.providers:
-            # Calculate different score components
-            service_type_score = self._calculate_service_type_score(query, provider)
-            direct_keyword_score = self._calculate_direct_keyword_score(query, provider)
-            
-            # TF-IDF score (if available)
-            tfidf_score = 0.0
-            if hasattr(self, 'tfidf_vectorizer') and self.tfidf_vectorizer is not None:
-                try:
-                    query_vector = self.tfidf_vectorizer.transform([query])
-                    provider_index = self.providers.index(provider)
-                    if provider_index < len(self.tfidf_matrix):
-                        similarity = cosine_similarity(query_vector, self.tfidf_matrix[provider_index:provider_index+1])
-                        tfidf_score = float(similarity[0][0]) * 10  # Scale up TF-IDF
-                except:
-                    tfidf_score = 0.0
-            
-            # Combine scores with weights
-            total_score = (
-                service_type_score * 0.4 +      # 40% weight to service type matching
-                direct_keyword_score * 0.4 +    # 40% weight to direct keyword matching  
-                tfidf_score * 0.2               # 20% weight to TF-IDF
-            )
-            
-            # Debug logging for home_modification services
-            if provider.type == 'home_modification':
-                print(f"DEBUG - {provider.name}:")
-                print(f"  Service Type Score: {service_type_score}")
-                print(f"  Direct Keyword Score: {direct_keyword_score}")
-                print(f"  TF-IDF Score: {tfidf_score}")
-                print(f"  Total Score: {total_score}")
-            
-            # Apply minimum threshold
-            if total_score >= 1.0:  # Temporarily lowered threshold
-                scored_providers.append((provider, total_score))
-        
-        # Sort by score (descending) and return top results
-        scored_providers.sort(key=lambda x: x[1], reverse=True)
-        return scored_providers[:limit] 
+        return ServiceList(providers=filtered_providers, total=len(filtered_providers)) 
