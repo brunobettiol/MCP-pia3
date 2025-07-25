@@ -624,12 +624,19 @@ class ServiceService:
 
     
     def recommend_best_provider_with_score(self, query: str) -> List[ServiceProvider]:
-        """Recommend up to 2 best service providers that meet criteria (do not return score)"""
+        """Recommend up to 2 best service providers that meet criteria (do not return score), ensure no duplicates"""
         if not query or not self.providers:
             return []
 
         scored_providers = []
+        seen_providers = set()
         for i, provider in enumerate(self.providers):
+            # Prevent duplicate providers
+            provider_id = getattr(provider, 'id', id(provider))
+            if provider_id in seen_providers:
+                continue
+            seen_providers.add(provider_id)
+
             exact_question_score = self._calculate_exact_question_match_score(query, provider)
             eldercare_score = self._calculate_eldercare_service_relevance_score(query, provider)
             direct_keyword_score = self._calculate_direct_keyword_score(query, provider)
@@ -652,8 +659,17 @@ class ServiceService:
                 scored_providers.append((provider, combined_score))
 
         scored_providers.sort(key=lambda x: x[1], reverse=True)
-        top_providers = [provider for provider, score in scored_providers[:2]]
-        return top_providers
+        unique_top_providers = []
+        top_provider_ids = set()
+        for provider, score in scored_providers:
+            pid = getattr(provider, 'id', id(provider))
+            if pid not in top_provider_ids:
+                unique_top_providers.append(provider)
+                top_provider_ids.add(pid)
+            if len(unique_top_providers) >= 2:
+                break
+        return unique_top_providers
+
 
 
     def get_best_recommendation(self, query: str) -> Optional[str]:
