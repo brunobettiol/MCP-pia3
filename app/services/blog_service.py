@@ -1,13 +1,15 @@
 import json
 import os
-from typing import List, Dict, Optional
 import re
 from datetime import datetime
+from typing import Dict, List, Optional
+
+import numpy as np
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
-import numpy as np
-from app.models.blog import BlogEntry, BlogList, BlogResponse
+
 from app.core.config import settings
+from app.models.blog import BlogEntry, BlogList, BlogResponse
 
 
 class BlogService:
@@ -601,20 +603,18 @@ class BlogService:
                 return blog
         return None
 
-    def get_recommendations(self, query: str, limit: int = 5) -> BlogList:
-        """Get blog recommendations with optimized scoring for the 35 specific questions"""
+    def get_recommendations(self, query: str, limit: int = 5) -> List[BlogEntry]:
+        """Get blog recommendations in the same return style as search_products: just the list of blogs, in ranked order, not wrapped in a BlogList object."""
         if not query or not self.blogs:
-            return BlogList(blogs=[], total=0)
-        
+            return []
+
         scored_blogs = []
-        
+
         for i, blog in enumerate(self.blogs):
-            # Calculate scores with priority on exact question matching
             exact_question_score = self._calculate_exact_question_match_score(query, blog)
             eldercare_score = self._calculate_eldercare_relevance_score(query, blog)
             direct_keyword_score = self._calculate_direct_keyword_score(query, blog)
-            
-            # TF-IDF score
+
             tfidf_score = 0.0
             if self.tfidf_matrix is not None and self.tfidf_vectorizer is not None:
                 try:
@@ -626,25 +626,20 @@ class BlogService:
                 except Exception as e:
                     print(f"Error calculating TF-IDF score for recommendations: {e}")
                     tfidf_score = 0.0
-            
-            # Combined scoring with heavy emphasis on exact question matching
+
             if exact_question_score > 0:
-                # If we have an exact question match, prioritize it heavily
                 combined_score = exact_question_score + (eldercare_score * 0.2) + (direct_keyword_score * 0.1)
-            elif tfidf_score > 0.8:  # Higher TF-IDF threshold for recommendations
+            elif tfidf_score > 0.8:
                 combined_score = (eldercare_score * 0.5) + (direct_keyword_score * 0.3) + (tfidf_score * 0.2)
             else:
                 combined_score = (eldercare_score * 0.7) + (direct_keyword_score * 0.3)
-            
-            # Lower threshold for recommendations to ensure results
+
             if combined_score > 2.0:
                 scored_blogs.append((blog, combined_score))
-        
-        # Sort by score and return top results
+
+        # Sort by descending score; return only list of blogs
         scored_blogs.sort(key=lambda x: x[1], reverse=True)
-        recommended_blogs = [blog for blog, score in scored_blogs[:limit]]
-        
-        return BlogList(blogs=recommended_blogs, total=len(recommended_blogs))
+        return [blog for blog, score in scored_blogs[:limit]]
 
     def recommend_best_blog_with_score(self, query: str) -> tuple[Optional[BlogEntry], float]:
         """Get the best blog recommendation with optimized scoring for the 35 specific questions"""
