@@ -623,10 +623,10 @@ class ServiceService:
         return ServiceList(providers=recommended_providers, total=len(recommended_providers))
 
     
-    def recommend_best_provider_with_score(self, query: str) -> Tuple[List[ServiceProvider]]:
+    def recommend_best_provider_with_score(self, query: str) -> List[ServiceProvider]:
         """Recommend up to 2 best service providers that meet criteria (do not return score)"""
         if not query or not self.providers:
-            return [],
+            return []
 
         scored_providers = []
         for i, provider in enumerate(self.providers):
@@ -653,7 +653,8 @@ class ServiceService:
 
         scored_providers.sort(key=lambda x: x[1], reverse=True)
         top_providers = [provider for provider, score in scored_providers[:2]]
-        return top_providers,
+        return top_providers
+
 
     def get_best_recommendation(self, query: str) -> Optional[str]:
         """Get the single best service provider recommendation ID with strict threshold for the 35 specific questions"""
