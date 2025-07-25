@@ -1,12 +1,14 @@
 import json
 import os
-from typing import List, Dict, Optional, Tuple
 import re
+from typing import Dict, List, Optional, Tuple
+
+import numpy as np
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
-import numpy as np
-from app.models.service import ServiceProvider, ServiceList, ServiceResponse
+
 from app.core.config import settings
+from app.models.service import ServiceList, ServiceProvider, ServiceResponse
 
 
 class ServiceService:
@@ -620,42 +622,38 @@ class ServiceService:
         
         return ServiceList(providers=recommended_providers, total=len(recommended_providers))
 
-    def recommend_best_provider_with_score(self, query: str) -> Tuple[Optional[ServiceProvider], float]:
-        """Get the best service provider recommendation with optimized scoring for the 35 specific questions"""
+    
+    def recommend_best_provider_with_score(self, query: str) -> Tuple[List[ServiceProvider]]:
+        """Recommend up to 2 best service providers that meet criteria (do not return score)"""
         if not query or not self.providers:
-            return None, 0.0
-        
-        best_provider = None
-        best_score = 0.0
-        
+            return [],
+
+        scored_providers = []
         for i, provider in enumerate(self.providers):
-            # Calculate scores with priority on exact question matching
             exact_question_score = self._calculate_exact_question_match_score(query, provider)
             eldercare_score = self._calculate_eldercare_service_relevance_score(query, provider)
             direct_keyword_score = self._calculate_direct_keyword_score(query, provider)
-            
-            # TF-IDF score
+
             tfidf_score = 0.0
             if self.tfidf_matrix is not None and self.tfidf_vectorizer is not None:
                 processed_query = self._preprocess_text(query)
                 query_vector = self.tfidf_vectorizer.transform([processed_query])
                 similarities = cosine_similarity(query_vector, self.tfidf_matrix).flatten()
-                tfidf_score = similarities[i] * 12  # Scale to 0-12
-            
-            # Combined score with heavy emphasis on exact question matching
+                tfidf_score = similarities[i] * 12
+
             if exact_question_score > 0:
-                # If we have an exact question match, prioritize it heavily
                 combined_score = exact_question_score + (eldercare_score * 0.1) + (direct_keyword_score * 0.1)
             elif tfidf_score > 0.8:
                 combined_score = (eldercare_score * 0.6) + (direct_keyword_score * 0.2) + (tfidf_score * 0.2)
             else:
                 combined_score = (eldercare_score * 0.7) + (direct_keyword_score * 0.3)
-            
-            if combined_score > best_score:
-                best_score = combined_score
-                best_provider = provider
-        
-        return best_provider, best_score
+
+            if combined_score > 0.0:
+                scored_providers.append((provider, combined_score))
+
+        scored_providers.sort(key=lambda x: x[1], reverse=True)
+        top_providers = [provider for provider, score in scored_providers[:2]]
+        return top_providers,
 
     def get_best_recommendation(self, query: str) -> Optional[str]:
         """Get the single best service provider recommendation ID with strict threshold for the 35 specific questions"""
