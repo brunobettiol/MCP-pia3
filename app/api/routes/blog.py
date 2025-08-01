@@ -53,13 +53,16 @@ def get_recommendations(
     """Get blog recommendations based on query"""
     return blog_service.get_recommendations(query, limit)
 
-@router.get("/ai/recommend/sources")
-def get_ai_recommendation(query: str = Query(..., description="Query for AI recommendation")):
-    """Get single best blog recommendation source_id for AI/MCP"""
-    source_id = blog_service.get_best_recommendation(query)
-    if not source_id:
-        raise HTTPException(status_code=404, detail="No relevant blog found")
-    return {"source_id": source_id}
+@router.get("/ai/recommend/sources", response_model=BlogList)
+def get_ai_recommendation(
+    query: str = Query(..., description="Query for AI recommendation"),
+    limit: int = Query(5, ge=1, le=20, description="Maximum number of recommendations")
+):
+    """Get blog recommendations for AI/MCP"""
+    blogs = blog_service.get_recommendations(query, limit)
+    if not blogs:
+        raise HTTPException(status_code=404, detail="No relevant blogs found")
+    return BlogList(blogs=blogs, total=len(blogs))
 
 @router.get("/ai/recommend/debug")
 def get_ai_recommendation_debug(query: str = Query(..., description="Query for AI recommendation debug")):

@@ -53,13 +53,16 @@ def get_recommendations(
     """Get service provider recommendations based on query"""
     return service_service.get_recommendations(query, limit)
 
-@router.get("/ai/recommend")
-def get_ai_recommendation(query: str = Query(..., description="Query for AI recommendation")):
-    """Get single best service provider recommendation ID for AI/MCP"""
-    provider_id = service_service.get_best_recommendation(query)
-    if not provider_id:
-        raise HTTPException(status_code=404, detail="No relevant service provider found")
-    return {"provider_id": provider_id}
+@router.get("/ai/recommend", response_model=ServiceList)
+def get_ai_recommendation(
+    query: str = Query(..., description="Query for AI recommendation"),
+    limit: int = Query(5, ge=1, le=20, description="Maximum number of recommendations")
+):
+    """Get service provider recommendations with scores for AI/MCP"""
+    providers = service_service.recommend_best_provider_with_score(query)
+    if not providers:
+        raise HTTPException(status_code=404, detail="No relevant service providers found")
+    return ServiceList(providers=providers[:limit], total=len(providers))
 
 @router.get("/ai/recommend/debug")
 def get_ai_recommendation_debug(query: str = Query(..., description="Query for AI recommendation debug")):
